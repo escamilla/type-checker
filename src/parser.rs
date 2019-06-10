@@ -1,7 +1,13 @@
 #[derive(Debug, PartialEq)]
-enum Token {
+pub enum Token {
+    Arrow,
+    Divide,
+    Equals,
     Identifier(String),
     Integer(i32),
+    Minus,
+    Plus,
+    Times,
 }
 
 pub struct Tokenizer<'a> {
@@ -22,22 +28,45 @@ impl<'a> Tokenizer<'a> {
         tokens
     }
 
-    pub fn next_token(&mut self) -> Option<Token> {
+    fn next_token(&mut self) -> Option<Token> {
         self.skip_whitespace();
-        if self.is_eof() {
-            None
-        } else if self.next_char().is_alphabetic() {
-            Some(self.read_identifier())
-        } else if self.next_char().is_numeric() || self.next_char() == '-' {
-            Some(self.read_integer())
-        } else {
-            panic!("unexpected character: {}", self.next_char())
-        }
-    }
-
-    fn skip_whitespace(&mut self) {
-        while !self.is_eof() && self.next_char().is_whitespace() {
-            self.position += 1;
+        match self.next_char() {
+            Some(c) => {
+                if c.is_alphabetic() {
+                    Some(self.read_identifier())
+                } else if c.is_numeric() {
+                    Some(self.read_integer())
+                } else if c == '+' {
+                    self.position += 1;
+                    Some(Token::Plus)
+                } else if c == '-' {
+                    if let Some(c2) = self.peek_char() {
+                        if c2.is_numeric() {
+                            return Some(self.read_integer());
+                        }
+                    }
+                    self.position += 1;
+                    Some(Token::Minus)
+                } else if c == '*' {
+                    self.position += 1;
+                    Some(Token::Times)
+                } else if c == '/' {
+                    self.position += 1;
+                    Some(Token::Divide)
+                } else if c == '=' {
+                    if let Some(c2) = self.peek_char() {
+                        if c2 == '>' {
+                            self.position += 2;
+                            return Some(Token::Arrow);
+                        }
+                    }
+                    self.position += 1;
+                    Some(Token::Equals)
+                } else {
+                    panic!("unexpected character: {}", c)
+                }
+            }
+            None => None,
         }
     }
 
@@ -45,28 +74,60 @@ impl<'a> Tokenizer<'a> {
         self.position >= self.input.len()
     }
 
-    fn next_char(&self) -> char {
-        self.input[self.position..].chars().next().unwrap()
+    fn next_char(&self) -> Option<char> {
+        if self.is_eof() {
+            None
+        } else {
+            self.input[self.position..].chars().next()
+        }
+    }
+
+    fn peek_char(&self) -> Option<char> {
+        if self.position + 1 >= self.input.len() {
+            None
+        } else {
+            self.input[self.position + 1..].chars().next()
+        }
+    }
+
+    fn skip_whitespace(&mut self) {
+        while let Some(c) = self.next_char() {
+            if c.is_whitespace() {
+                self.position += 1;
+            } else {
+                break;
+            }
+        }
     }
 
     fn read_identifier(&mut self) -> Token {
         let mut buffer = String::new();
-        while !self.is_eof() && self.next_char().is_alphabetic() {
-            buffer.push(self.next_char());
-            self.position += 1;
+        while let Some(c) = self.next_char() {
+            if c.is_alphabetic() {
+                buffer.push(c);
+                self.position += 1;
+            } else {
+                break;
+            }
         }
         Token::Identifier(buffer)
     }
 
     fn read_integer(&mut self) -> Token {
         let mut buffer = String::new();
-        if self.next_char() == '-' {
-            buffer.push(self.next_char());
-            self.position += 1;
+        if let Some(c) = self.next_char() {
+            if c == '-' {
+                buffer.push(c);
+                self.position += 1;
+            }
         }
-        while !self.is_eof() && self.next_char().is_numeric() {
-            buffer.push(self.next_char());
-            self.position += 1;
+        while let Some(c) = self.next_char() {
+            if c.is_numeric() {
+                buffer.push(c);
+                self.position += 1;
+            } else {
+                break;
+            }
         }
         let value: i32 = buffer.parse().unwrap();
         Token::Integer(value)
@@ -114,8 +175,44 @@ mod tests {
     }
 
     #[test]
+    fn test_tokenize_minus_and_integer() {
+        let mut tokenizer = Tokenizer::new("- 42");
+        assert_eq!(tokenizer.tokenize(), vec![Token::Minus, Token::Integer(42)]);
+    }
+
+    #[test]
+    fn test_tokenize_math_operators() {
+        let mut tokenizer = Tokenizer::new("+ - * / =");
+        assert_eq!(
+            tokenizer.tokenize(),
+            vec![
+                Token::Plus,
+                Token::Minus,
+                Token::Times,
+                Token::Divide,
+                Token::Equals,
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_arrow() {
+        let mut tokenizer = Tokenizer::new("=>");
+        assert_eq!(tokenizer.tokenize(), vec![Token::Arrow]);
+    }
+
+    #[test]
     fn test_tokenize_with_leading_and_trailing_whitespace() {
         let mut tokenizer = Tokenizer::new(" 42 ");
         assert_eq!(tokenizer.tokenize(), vec![Token::Integer(42)]);
+    }
+
+    #[test]
+    fn test_tokenize_multiline_string() {
+        let mut tokenizer = Tokenizer::new("1 +\n2");
+        assert_eq!(
+            tokenizer.tokenize(),
+            vec![Token::Integer(1), Token::Plus, Token::Integer(2)]
+        );
     }
 }
