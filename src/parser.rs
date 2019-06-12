@@ -1,218 +1,297 @@
-#[derive(Debug, PartialEq)]
-pub enum Token {
-    Arrow,
+use crate::parser::Term::Application;
+use crate::tokenizer::{Token, Tokenizer};
+
+pub enum BinaryOperator {
+    Plus,
+    Minus,
+    Times,
     Divide,
-    Equals,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Term {
+    Application {
+        function: Box<Term>,
+        argument: Box<Term>,
+    },
     Identifier(String),
     Integer(i32),
-    Minus,
-    Plus,
-    Times,
+    FunctionDefinition {
+        parameter: Box<Term>,
+        body: Box<Term>,
+    },
 }
 
-pub struct Tokenizer<'a> {
-    input: &'a str,
-    position: usize,
+pub fn parse(tokens: &Vec<Token>) -> Result<Term, String> {
+    match parse_expression(tokens, 0) {
+        Ok((term, position)) => Ok(term),
+        Err(message) => Err(message),
+    }
 }
 
-impl<'a> Tokenizer<'a> {
-    pub fn new(input: &str) -> Tokenizer {
-        Tokenizer { input, position: 0 }
-    }
-
-    pub fn tokenize(&mut self) -> Vec<Token> {
-        let mut tokens = Vec::new();
-        while let Some(token) = self.next_token() {
-            tokens.push(token);
-        }
-        tokens
-    }
-
-    fn next_token(&mut self) -> Option<Token> {
-        self.skip_whitespace();
-        match self.next_char() {
-            Some(c) => {
-                if c.is_alphabetic() {
-                    Some(self.read_identifier())
-                } else if c.is_numeric() {
-                    Some(self.read_integer())
-                } else if c == '+' {
-                    self.position += 1;
-                    Some(Token::Plus)
-                } else if c == '-' {
-                    if let Some(c2) = self.peek_char() {
-                        if c2.is_numeric() {
-                            return Some(self.read_integer());
-                        }
+fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::KeywordFn => parse_function_definition(tokens, position),
+            Token::Identifier(name) => {
+                if let Some(next_token) = tokens.get(position + 1) {
+                    if is_binary_operator(next_token) {
+                        parse_binary_operation(tokens, position)
+                    } else {
+                        Ok((Term::Identifier(name.clone()), position + 1))
                     }
-                    self.position += 1;
-                    Some(Token::Minus)
-                } else if c == '*' {
-                    self.position += 1;
-                    Some(Token::Times)
-                } else if c == '/' {
-                    self.position += 1;
-                    Some(Token::Divide)
-                } else if c == '=' {
-                    if let Some(c2) = self.peek_char() {
-                        if c2 == '>' {
-                            self.position += 2;
-                            return Some(Token::Arrow);
-                        }
-                    }
-                    self.position += 1;
-                    Some(Token::Equals)
                 } else {
-                    panic!("unexpected character: {}", c)
+                    Ok((Term::Identifier(name.clone()), position + 1))
                 }
             }
-            None => None,
+            Token::Integer(value) => {
+                if let Some(next_token) = tokens.get(position + 1) {
+                    if is_binary_operator(next_token) {
+                        parse_binary_operation(tokens, position)
+                    } else {
+                        Ok((Term::Integer(*value), position + 1))
+                    }
+                } else {
+                    Ok((Term::Integer(*value), position + 1))
+                }
+            }
+            _ => Err(format!(
+                "expected `fn` keyword, identifier, or integer but got {:?}",
+                token,
+            )),
         }
+    } else {
+        Err(String::from(
+            "expected `fn` keyword, identifier, or integer but got nothing",
+        ))
     }
+}
 
-    fn is_eof(&self) -> bool {
-        self.position >= self.input.len()
-    }
-
-    fn next_char(&self) -> Option<char> {
-        if self.is_eof() {
-            None
-        } else {
-            self.input[self.position..].chars().next()
+fn parse_function_definition(
+    tokens: &Vec<Token>,
+    position: usize,
+) -> Result<(Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::KeywordFn => match parse_identifier(tokens, position + 1) {
+                Ok((parameter_term, _)) => {
+                    if let Some(token) = tokens.get(position + 2) {
+                        match token {
+                            Token::Arrow => match parse_expression(tokens, position + 3) {
+                                Ok((body_term, position)) => Ok((
+                                    Term::FunctionDefinition {
+                                        parameter: Box::from(parameter_term),
+                                        body: Box::from(body_term),
+                                    },
+                                    position,
+                                )),
+                                Err(message) => Err(message),
+                            },
+                            _ => Err(format!(
+                                "expected `=>` after `fn` keyword and function parameter but got {:?}",
+                                token
+                            )),
+                        }
+                    } else {
+                        Err(String::from(
+                            "expected `=>` after `fn` keyword and function parameter but got nothing",
+                        ))
+                    }
+                }
+                Err(message) => Err(message),
+            },
+            _ => Err(format!("expected `fn` keyword but got {:?}", token)),
         }
+    } else {
+        Err(String::from("expected `fn` keyword but got nothing"))
     }
+}
 
-    fn peek_char(&self) -> Option<char> {
-        if self.position + 1 >= self.input.len() {
-            None
-        } else {
-            self.input[self.position + 1..].chars().next()
+fn parse_identifier(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::Identifier(name) => Ok((Term::Identifier(name.clone()), position + 1)),
+            _ => Err(format!("expected identifier but got {:?}", token)),
         }
+    } else {
+        Err(format!("expected identifier but got nothing"))
     }
+}
 
-    fn skip_whitespace(&mut self) {
-        while let Some(c) = self.next_char() {
-            if c.is_whitespace() {
-                self.position += 1;
+fn is_binary_operator(token: &Token) -> bool {
+    match token {
+        Token::Plus | Token::Minus | Token::Times | Token::Divide => true,
+        _ => false,
+    }
+}
+
+fn parse_binary_operation(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
+    match parse_integer_or_identifier(tokens, position) {
+        Ok((left_term, position)) => {
+            if let Some(token) = tokens.get(position) {
+                if is_binary_operator(token) {
+                    match parse_integer_or_identifier(tokens, position + 1) {
+                        Ok((right_term, position)) => Ok((
+                            Term::Application {
+                                function: Box::from(Term::Application {
+                                    function: Box::from(Term::Identifier(String::from("+"))),
+                                    argument: Box::from(left_term),
+                                }),
+                                argument: Box::from(right_term),
+                            },
+                            position,
+                        )),
+                        Err(message) => Err(message),
+                    }
+                } else {
+                    Err(format!("expected binary operator but got {:?}", token))
+                }
             } else {
-                break;
+                Err(String::from("expected binary operator but got nothing"))
             }
         }
+        Err(message) => Err(message),
     }
+}
 
-    fn read_identifier(&mut self) -> Token {
-        let mut buffer = String::new();
-        while let Some(c) = self.next_char() {
-            if c.is_alphabetic() {
-                buffer.push(c);
-                self.position += 1;
-            } else {
-                break;
-            }
+fn parse_integer_or_identifier(
+    tokens: &Vec<Token>,
+    position: usize,
+) -> Result<(Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::Integer(value) => Ok((Term::Integer(*value), position + 1)),
+            Token::Identifier(name) => Ok((Term::Identifier(name.clone()), position + 1)),
+            _ => Err(format!(
+                "expected integer or identifier but got {:?}",
+                token
+            )),
         }
-        Token::Identifier(buffer)
-    }
-
-    fn read_integer(&mut self) -> Token {
-        let mut buffer = String::new();
-        if let Some(c) = self.next_char() {
-            if c == '-' {
-                buffer.push(c);
-                self.position += 1;
-            }
-        }
-        while let Some(c) = self.next_char() {
-            if c.is_numeric() {
-                buffer.push(c);
-                self.position += 1;
-            } else {
-                break;
-            }
-        }
-        let value: i32 = buffer.parse().unwrap();
-        Token::Integer(value)
+    } else {
+        Err(String::from(
+            "expected integer or identifier but got nothing",
+        ))
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{Token, Tokenizer};
+    use crate::parser::{parse, Term};
+    use crate::tokenizer::Tokenizer;
 
     #[test]
-    fn test_tokenize_single_character_identifier() {
-        let mut tokenizer = Tokenizer::new("p");
+    fn test_parse_integer() {
+        let mut tokenizer = Tokenizer::new("1");
+        let tokens = tokenizer.tokenize();
+        assert_eq!(parse(&tokens), Ok(Term::Integer(1)));
+    }
+
+    #[test]
+    fn test_parse_identifier() {
+        let mut tokenizer = Tokenizer::new("x");
+        let tokens = tokenizer.tokenize();
+        assert_eq!(parse(&tokens), Ok(Term::Identifier(String::from("x"))));
+    }
+
+    #[test]
+    fn test_parse_binary_operation_with_two_integers() {
+        let mut tokenizer = Tokenizer::new("1 + 2");
+        let tokens = tokenizer.tokenize();
+
         assert_eq!(
-            tokenizer.tokenize(),
-            vec![Token::Identifier(String::from("p"))]
+            parse(&tokens),
+            Ok(Term::Application {
+                function: Box::from(Term::Application {
+                    function: Box::from(Term::Identifier(String::from("+"))),
+                    argument: Box::from(Term::Integer(1))
+                }),
+                argument: Box::from(Term::Integer(2))
+            })
         );
     }
 
     #[test]
-    fn test_tokenize_multi_character_identifier() {
-        let mut tokenizer = Tokenizer::new("pi");
+    fn test_parse_binary_operation_with_two_identifiers() {
+        let mut tokenizer = Tokenizer::new("a + b");
+        let tokens = tokenizer.tokenize();
+
         assert_eq!(
-            tokenizer.tokenize(),
-            vec![Token::Identifier(String::from("pi"))]
+            parse(&tokens),
+            Ok(Term::Application {
+                function: Box::from(Term::Application {
+                    function: Box::from(Term::Identifier(String::from("+"))),
+                    argument: Box::from(Term::Identifier(String::from("a")))
+                }),
+                argument: Box::from(Term::Identifier(String::from("b")))
+            })
         );
     }
 
     #[test]
-    fn test_tokenize_single_digit_integer() {
-        let mut tokenizer = Tokenizer::new("4");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Integer(4)]);
-    }
+    fn test_parse_binary_operation_with_an_integer_and_an_identifier() {
+        let mut tokenizer = Tokenizer::new("1 + x");
+        let tokens = tokenizer.tokenize();
 
-    #[test]
-    fn test_tokenize_multi_digit_integer() {
-        let mut tokenizer = Tokenizer::new("42");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Integer(42)]);
-    }
-
-    #[test]
-    fn test_tokenize_negative_integer() {
-        let mut tokenizer = Tokenizer::new("-42");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Integer(-42)]);
-    }
-
-    #[test]
-    fn test_tokenize_minus_and_integer() {
-        let mut tokenizer = Tokenizer::new("- 42");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Minus, Token::Integer(42)]);
-    }
-
-    #[test]
-    fn test_tokenize_math_operators() {
-        let mut tokenizer = Tokenizer::new("+ - * / =");
         assert_eq!(
-            tokenizer.tokenize(),
-            vec![
-                Token::Plus,
-                Token::Minus,
-                Token::Times,
-                Token::Divide,
-                Token::Equals,
-            ]
+            parse(&tokens),
+            Ok(Term::Application {
+                function: Box::from(Term::Application {
+                    function: Box::from(Term::Identifier(String::from("+"))),
+                    argument: Box::from(Term::Integer(1))
+                }),
+                argument: Box::from(Term::Identifier(String::from("x")))
+            })
         );
     }
 
     #[test]
-    fn test_tokenize_arrow() {
-        let mut tokenizer = Tokenizer::new("=>");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Arrow]);
-    }
+    fn test_parse_binary_operation_with_an_identifier_and_an_integer() {
+        let mut tokenizer = Tokenizer::new("x + 1");
+        let tokens = tokenizer.tokenize();
 
-    #[test]
-    fn test_tokenize_with_leading_and_trailing_whitespace() {
-        let mut tokenizer = Tokenizer::new(" 42 ");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Integer(42)]);
-    }
-
-    #[test]
-    fn test_tokenize_multiline_string() {
-        let mut tokenizer = Tokenizer::new("1 +\n2");
         assert_eq!(
-            tokenizer.tokenize(),
-            vec![Token::Integer(1), Token::Plus, Token::Integer(2)]
+            parse(&tokens),
+            Ok(Term::Application {
+                function: Box::from(Term::Application {
+                    function: Box::from(Term::Identifier(String::from("+"))),
+                    argument: Box::from(Term::Identifier(String::from("x")))
+                }),
+                argument: Box::from(Term::Integer(1))
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_identity_function() {
+        let mut tokenizer = Tokenizer::new("fn x => x");
+        let tokens = tokenizer.tokenize();
+
+        assert_eq!(
+            parse(&tokens),
+            Ok(Term::FunctionDefinition {
+                parameter: Box::from(Term::Identifier(String::from("x"))),
+                body: Box::from(Term::Identifier(String::from("x")))
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_increment_function() {
+        let mut tokenizer = Tokenizer::new("fn x => x + 1");
+        let tokens = tokenizer.tokenize();
+
+        assert_eq!(
+            parse(&tokens),
+            Ok(Term::FunctionDefinition {
+                parameter: Box::from(Term::Identifier(String::from("x"))),
+                body: Box::from(Term::Application {
+                    function: Box::from(Term::Application {
+                        function: Box::from(Term::Identifier(String::from("+"))),
+                        argument: Box::from(Term::Identifier(String::from("x")))
+                    }),
+                    argument: Box::from(Term::Integer(1))
+                })
+            })
         );
     }
 }
