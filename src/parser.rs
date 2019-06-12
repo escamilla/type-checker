@@ -1,12 +1,4 @@
-use crate::parser::Term::Application;
 use crate::tokenizer::{Token, Tokenizer};
-
-pub enum BinaryOperator {
-    Plus,
-    Minus,
-    Times,
-    Divide,
-}
 
 #[derive(Debug, PartialEq)]
 pub enum Term {
@@ -14,12 +6,12 @@ pub enum Term {
         function: Box<Term>,
         argument: Box<Term>,
     },
-    Identifier(String),
-    Integer(i32),
     FunctionDefinition {
         parameter: Box<Term>,
         body: Box<Term>,
     },
+    Identifier(String),
+    Integer(i32),
 }
 
 pub fn parse(tokens: &Vec<Token>) -> Result<Term, String> {
@@ -32,7 +24,6 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Term, String> {
 fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
     if let Some(token) = tokens.get(position) {
         match token {
-            Token::KeywordFn => parse_function_definition(tokens, position),
             Token::Identifier(name) => {
                 if let Some(next_token) = tokens.get(position + 1) {
                     if is_binary_operator(next_token) {
@@ -55,14 +46,15 @@ fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
                     Ok((Term::Integer(*value), position + 1))
                 }
             }
+            Token::KeywordFn => parse_function_definition(tokens, position),
             _ => Err(format!(
-                "expected `fn` keyword, identifier, or integer but got {:?}",
+                "expected identifier, integer, or `fn` keyword but got {:?}",
                 token,
             )),
         }
     } else {
         Err(String::from(
-            "expected `fn` keyword, identifier, or integer but got nothing",
+            "expected identifier, integer, or `fn` keyword but got nothing",
         ))
     }
 }
@@ -128,13 +120,19 @@ fn is_binary_operator(token: &Token) -> bool {
 fn parse_binary_operation(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
     match parse_integer_or_identifier(tokens, position) {
         Ok((left_term, position)) => {
-            if let Some(token) = tokens.get(position) {
-                if is_binary_operator(token) {
+            if let Some(middle_token) = tokens.get(position) {
+                if is_binary_operator(middle_token) {
                     match parse_integer_or_identifier(tokens, position + 1) {
                         Ok((right_term, position)) => Ok((
                             Term::Application {
                                 function: Box::from(Term::Application {
-                                    function: Box::from(Term::Identifier(String::from("+"))),
+                                    function: Box::from(Term::Identifier(match middle_token {
+                                        Token::Plus => String::from("+"),
+                                        Token::Minus => String::from("-"),
+                                        Token::Times => String::from("*"),
+                                        Token::Divide => String::from("/"),
+                                        _ => unimplemented!(),
+                                    })),
                                     argument: Box::from(left_term),
                                 }),
                                 argument: Box::from(right_term),
@@ -144,7 +142,10 @@ fn parse_binary_operation(tokens: &Vec<Token>, position: usize) -> Result<(Term,
                         Err(message) => Err(message),
                     }
                 } else {
-                    Err(format!("expected binary operator but got {:?}", token))
+                    Err(format!(
+                        "expected binary operator but got {:?}",
+                        middle_token
+                    ))
                 }
             } else {
                 Err(String::from("expected binary operator but got nothing"))
@@ -194,58 +195,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_binary_operation_with_two_integers() {
-        let mut tokenizer = Tokenizer::new("1 + 2");
-        let tokens = tokenizer.tokenize();
-
-        assert_eq!(
-            parse(&tokens),
-            Ok(Term::Application {
-                function: Box::from(Term::Application {
-                    function: Box::from(Term::Identifier(String::from("+"))),
-                    argument: Box::from(Term::Integer(1))
-                }),
-                argument: Box::from(Term::Integer(2))
-            })
-        );
-    }
-
-    #[test]
-    fn test_parse_binary_operation_with_two_identifiers() {
-        let mut tokenizer = Tokenizer::new("a + b");
-        let tokens = tokenizer.tokenize();
-
-        assert_eq!(
-            parse(&tokens),
-            Ok(Term::Application {
-                function: Box::from(Term::Application {
-                    function: Box::from(Term::Identifier(String::from("+"))),
-                    argument: Box::from(Term::Identifier(String::from("a")))
-                }),
-                argument: Box::from(Term::Identifier(String::from("b")))
-            })
-        );
-    }
-
-    #[test]
-    fn test_parse_binary_operation_with_an_integer_and_an_identifier() {
-        let mut tokenizer = Tokenizer::new("1 + x");
-        let tokens = tokenizer.tokenize();
-
-        assert_eq!(
-            parse(&tokens),
-            Ok(Term::Application {
-                function: Box::from(Term::Application {
-                    function: Box::from(Term::Identifier(String::from("+"))),
-                    argument: Box::from(Term::Integer(1))
-                }),
-                argument: Box::from(Term::Identifier(String::from("x")))
-            })
-        );
-    }
-
-    #[test]
-    fn test_parse_binary_operation_with_an_identifier_and_an_integer() {
+    fn test_parse_addition() {
         let mut tokenizer = Tokenizer::new("x + 1");
         let tokens = tokenizer.tokenize();
 
@@ -257,6 +207,57 @@ mod tests {
                     argument: Box::from(Term::Identifier(String::from("x")))
                 }),
                 argument: Box::from(Term::Integer(1))
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_subtraction() {
+        let mut tokenizer = Tokenizer::new("x - 1");
+        let tokens = tokenizer.tokenize();
+
+        assert_eq!(
+            parse(&tokens),
+            Ok(Term::Application {
+                function: Box::from(Term::Application {
+                    function: Box::from(Term::Identifier(String::from("-"))),
+                    argument: Box::from(Term::Identifier(String::from("x")))
+                }),
+                argument: Box::from(Term::Integer(1))
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_multiplication() {
+        let mut tokenizer = Tokenizer::new("x * 2");
+        let tokens = tokenizer.tokenize();
+
+        assert_eq!(
+            parse(&tokens),
+            Ok(Term::Application {
+                function: Box::from(Term::Application {
+                    function: Box::from(Term::Identifier(String::from("*"))),
+                    argument: Box::from(Term::Identifier(String::from("x")))
+                }),
+                argument: Box::from(Term::Integer(2))
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_division() {
+        let mut tokenizer = Tokenizer::new("x / 2");
+        let tokens = tokenizer.tokenize();
+
+        assert_eq!(
+            parse(&tokens),
+            Ok(Term::Application {
+                function: Box::from(Term::Application {
+                    function: Box::from(Term::Identifier(String::from("/"))),
+                    argument: Box::from(Term::Identifier(String::from("x")))
+                }),
+                argument: Box::from(Term::Integer(2))
             })
         );
     }
