@@ -6,11 +6,13 @@ pub enum Token {
     Identifier(String),
     Integer(i32),
     KeywordElse,
+    KeywordEnd,
     KeywordFn,
     KeywordIf,
     KeywordIn,
     KeywordLet,
     KeywordThen,
+    KeywordVal,
     Minus,
     Plus,
     Times,
@@ -118,11 +120,13 @@ impl<'a> Tokenizer<'a> {
         }
         match buffer.as_str() {
             "else" => Token::KeywordElse,
+            "end" => Token::KeywordEnd,
             "fn" => Token::KeywordFn,
             "if" => Token::KeywordIf,
             "in" => Token::KeywordIn,
             "let" => Token::KeywordLet,
             "then" => Token::KeywordThen,
+            "val" => Token::KeywordVal,
             _ => Token::Identifier(buffer),
         }
     }
@@ -260,6 +264,30 @@ mod tests {
                 Token::Integer(0),
                 Token::KeywordElse,
                 Token::Integer(1)
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_let_expression() {
+        let mut tokenizer = Tokenizer::new("let val inc = fn x => x + 1 in inc 42 end");
+        assert_eq!(
+            tokenizer.tokenize(),
+            vec![
+                Token::KeywordLet,
+                Token::KeywordVal,
+                Token::Identifier(String::from("inc")),
+                Token::Equals,
+                Token::KeywordFn,
+                Token::Identifier(String::from("x")),
+                Token::Arrow,
+                Token::Identifier(String::from("x")),
+                Token::Plus,
+                Token::Integer(1),
+                Token::KeywordIn,
+                Token::Identifier(String::from("inc")),
+                Token::Integer(42),
+                Token::KeywordEnd,
             ]
         );
     }

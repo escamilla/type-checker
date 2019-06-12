@@ -16,6 +16,11 @@ pub enum Term {
         true_branch: Box<Term>,
         false_branch: Box<Term>,
     },
+    LetExpression {
+        name_term: Box<Term>,
+        value_term: Box<Term>,
+        body_term: Box<Term>,
+    },
     Integer(i32),
 }
 
@@ -31,12 +36,22 @@ fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
         match token {
             Token::KeywordFn => parse_function_definition(tokens, position),
             Token::KeywordIf => parse_if_expression(tokens, position),
+            Token::KeywordLet => parse_let_expression(tokens, position),
             Token::Identifier(name) => {
                 if let Some(next_token) = tokens.get(position + 1) {
                     if is_binary_operator(next_token) {
                         parse_binary_operation(tokens, position)
                     } else {
-                        Ok((Term::Identifier(name.clone()), position + 1))
+                        match parse_expression(tokens, position + 1) {
+                            Ok((argument_term, position)) => Ok((
+                                Term::FunctionApplication {
+                                    function: Box::from(Term::Identifier(name.clone())),
+                                    argument: Box::from(argument_term),
+                                },
+                                position,
+                            )),
+                            Err(message) => Err(message),
+                        }
                     }
                 } else {
                     Ok((Term::Identifier(name.clone()), position + 1))
@@ -62,6 +77,82 @@ fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
         Err(String::from(
             "expected `fn` keyword, `if` keyword, identifier, or integer but got nothing",
         ))
+    }
+}
+
+fn parse_val_statement(
+    tokens: &Vec<Token>,
+    position: usize,
+) -> Result<(Term, Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::KeywordVal => match parse_identifier(tokens, position + 1) {
+                Ok((val_name_term, position)) => {
+                    if let Some(token) = tokens.get(position) {
+                        match token {
+                            Token::Equals => match parse_expression(tokens, position + 1) {
+                                Ok((val_value_term, position)) => {
+                                    Ok((val_name_term, val_value_term, position))
+                                }
+                                Err(message) => Err(message),
+                            },
+                            _ => Err(format!("expected `=` but got {:?}", token)),
+                        }
+                    } else {
+                        Err(String::from("expected `=` but got nothing"))
+                    }
+                }
+                Err(message) => Err(message),
+            },
+            _ => Err(format!("expected `val` keyword but got {:?}", token)),
+        }
+    } else {
+        Err(format!("expected `val` keyword but got nothing"))
+    }
+}
+
+fn parse_let_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::KeywordLet => match parse_val_statement(tokens, position + 1) {
+                Ok((val_name_term, val_value_term, position)) => {
+                    if let Some(token) = tokens.get(position) {
+                        match token {
+                            Token::KeywordIn => match parse_expression(tokens, position + 1) {
+                                Ok((val_body_term, position)) => {
+                                    if let Some(token) = tokens.get(position) {
+                                        match token {
+                                            Token::KeywordEnd => Ok((
+                                                Term::LetExpression {
+                                                    name_term: Box::from(val_name_term),
+                                                    value_term: Box::from(val_value_term),
+                                                    body_term: Box::from(val_body_term),
+                                                },
+                                                position,
+                                            )),
+                                            _ => Err(format!(
+                                                "expected `end` keyword but got {:?}",
+                                                token
+                                            )),
+                                        }
+                                    } else {
+                                        Err(String::from("expected `end` keyword but got nothing"))
+                                    }
+                                }
+                                Err(message) => Err(message),
+                            },
+                            _ => Err(format!("expected `in` keyword but got {:?}", token)),
+                        }
+                    } else {
+                        Err(String::from("expected `in` keyword but got nothing"))
+                    }
+                }
+                Err(message) => Err(message),
+            },
+            _ => Err(format!("expected `let` keyword but got {:?}", token)),
+        }
+    } else {
+        Err(String::from("expected `let` keyword but got nothing"))
     }
 }
 
@@ -240,7 +331,7 @@ fn parse_integer_or_identifier(
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{parse, Term};
+    use crate::parser::{parse, parse_val_statement, Term};
     use crate::tokenizer::Tokenizer;
 
     #[test]
@@ -376,6 +467,58 @@ mod tests {
                 }),
                 true_branch: Box::from(Term::Integer(0)),
                 false_branch: Box::from(Term::Integer(1)),
+            })
+        );
+    }
+
+    #[test]
+    fn test_parse_val_statement() {
+        let mut tokenizer = Tokenizer::new("val inc = fn x => x + 1");
+        let tokens = tokenizer.tokenize();
+
+        assert_eq!(
+            parse_val_statement(&tokens, 0),
+            Ok((
+                Term::Identifier(String::from("inc")),
+                Term::FunctionDefinition {
+                    parameter: Box::from(Term::Identifier(String::from("x"))),
+                    body: Box::from(Term::FunctionApplication {
+                        function: Box::from(Term::FunctionApplication {
+                            function: Box::from(Term::Identifier(String::from("+"))),
+                            argument: Box::from(Term::Identifier(String::from("x")))
+                        }),
+                        argument: Box::from(Term::Integer(1))
+                    }),
+                },
+                // total number of tokens
+                9
+            )),
+        );
+    }
+
+    #[test]
+    fn test_parse_let_expression() {
+        let mut tokenizer = Tokenizer::new("let val inc = fn x => x + 1 in inc 42 end");
+        let tokens = tokenizer.tokenize();
+
+        assert_eq!(
+            parse(&tokens),
+            Ok(Term::LetExpression {
+                name_term: Box::from(Term::Identifier(String::from("inc"))),
+                value_term: Box::from(Term::FunctionDefinition {
+                    parameter: Box::from(Term::Identifier(String::from("x"))),
+                    body: Box::from(Term::FunctionApplication {
+                        function: Box::from(Term::FunctionApplication {
+                            function: Box::from(Term::Identifier(String::from("+"))),
+                            argument: Box::from(Term::Identifier(String::from("x")))
+                        }),
+                        argument: Box::from(Term::Integer(1))
+                    }),
+                }),
+                body_term: Box::from(Term::FunctionApplication {
+                    function: Box::from(Term::Identifier(String::from("inc"))),
+                    argument: Box::from(Term::Integer(42))
+                })
             })
         );
     }
