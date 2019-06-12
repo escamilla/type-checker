@@ -5,6 +5,7 @@ pub enum Token {
     Equals,
     Identifier(String),
     Integer(i32),
+    KeywordElse,
     KeywordFn,
     KeywordIf,
     KeywordIn,
@@ -116,6 +117,7 @@ impl<'a> Tokenizer<'a> {
             }
         }
         match buffer.as_str() {
+            "else" => Token::KeywordElse,
             "fn" => Token::KeywordFn,
             "if" => Token::KeywordIf,
             "in" => Token::KeywordIn,
@@ -225,6 +227,40 @@ mod tests {
         assert_eq!(
             tokenizer.tokenize(),
             vec![Token::Integer(1), Token::Plus, Token::Integer(2)]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_function_definition() {
+        let mut tokenizer = Tokenizer::new("fn x => x + 1");
+        assert_eq!(
+            tokenizer.tokenize(),
+            vec![
+                Token::KeywordFn,
+                Token::Identifier(String::from("x")),
+                Token::Arrow,
+                Token::Identifier(String::from("x")),
+                Token::Plus,
+                Token::Integer(1),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_tokenize_if_expression() {
+        let mut tokenizer = Tokenizer::new("if x = y then 0 else 1");
+        assert_eq!(
+            tokenizer.tokenize(),
+            vec![
+                Token::KeywordIf,
+                Token::Identifier(String::from("x")),
+                Token::Equals,
+                Token::Identifier(String::from("y")),
+                Token::KeywordThen,
+                Token::Integer(0),
+                Token::KeywordElse,
+                Token::Integer(1)
+            ]
         );
     }
 }
