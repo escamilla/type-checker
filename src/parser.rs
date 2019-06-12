@@ -17,9 +17,9 @@ pub enum Term {
         false_branch: Box<Term>,
     },
     LetExpression {
-        name_term: Box<Term>,
-        value_term: Box<Term>,
-        body_term: Box<Term>,
+        declaration_name: Box<Term>,
+        declaration_value: Box<Term>,
+        expression: Box<Term>,
     },
     Integer(i32),
 }
@@ -80,7 +80,7 @@ fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
     }
 }
 
-fn parse_val_statement(
+fn parse_declaration_clause(
     tokens: &Vec<Token>,
     position: usize,
 ) -> Result<(Term, Term, usize), String> {
@@ -114,19 +114,23 @@ fn parse_val_statement(
 fn parse_let_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
     if let Some(token) = tokens.get(position) {
         match token {
-            Token::KeywordLet => match parse_val_statement(tokens, position + 1) {
-                Ok((val_name_term, val_value_term, position)) => {
+            Token::KeywordLet => match parse_declaration_clause(tokens, position + 1) {
+                Ok((declaration_name_term, declaration_value_term, position)) => {
                     if let Some(token) = tokens.get(position) {
                         match token {
                             Token::KeywordIn => match parse_expression(tokens, position + 1) {
-                                Ok((val_body_term, position)) => {
+                                Ok((expression_term, position)) => {
                                     if let Some(token) = tokens.get(position) {
                                         match token {
                                             Token::KeywordEnd => Ok((
                                                 Term::LetExpression {
-                                                    name_term: Box::from(val_name_term),
-                                                    value_term: Box::from(val_value_term),
-                                                    body_term: Box::from(val_body_term),
+                                                    declaration_name: Box::from(
+                                                        declaration_name_term,
+                                                    ),
+                                                    declaration_value: Box::from(
+                                                        declaration_value_term,
+                                                    ),
+                                                    expression: Box::from(expression_term),
                                                 },
                                                 position,
                                             )),
@@ -331,7 +335,7 @@ fn parse_integer_or_identifier(
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{parse, parse_val_statement, Term};
+    use crate::parser::{parse, parse_declaration_clause, Term};
     use crate::tokenizer::Tokenizer;
 
     #[test]
@@ -472,12 +476,12 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_val_statement() {
+    fn test_parse_declaration_clause() {
         let mut tokenizer = Tokenizer::new("val inc = fn x => x + 1");
         let tokens = tokenizer.tokenize();
 
         assert_eq!(
-            parse_val_statement(&tokens, 0),
+            parse_declaration_clause(&tokens, 0),
             Ok((
                 Term::Identifier(String::from("inc")),
                 Term::FunctionDefinition {
@@ -490,8 +494,7 @@ mod tests {
                         argument: Box::from(Term::Integer(1))
                     }),
                 },
-                // total number of tokens
-                9
+                tokens.len()
             )),
         );
     }
@@ -504,8 +507,8 @@ mod tests {
         assert_eq!(
             parse(&tokens),
             Ok(Term::LetExpression {
-                name_term: Box::from(Term::Identifier(String::from("inc"))),
-                value_term: Box::from(Term::FunctionDefinition {
+                declaration_name: Box::from(Term::Identifier(String::from("inc"))),
+                declaration_value: Box::from(Term::FunctionDefinition {
                     parameter: Box::from(Term::Identifier(String::from("x"))),
                     body: Box::from(Term::FunctionApplication {
                         function: Box::from(Term::FunctionApplication {
@@ -515,7 +518,7 @@ mod tests {
                         argument: Box::from(Term::Integer(1))
                     }),
                 }),
-                body_term: Box::from(Term::FunctionApplication {
+                expression: Box::from(Term::FunctionApplication {
                     function: Box::from(Term::Identifier(String::from("inc"))),
                     argument: Box::from(Term::Integer(42))
                 })
