@@ -1,6 +1,7 @@
 use crate::parser::Term;
+use std::collections::HashMap;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Type {
     Variable(u32),
 }
@@ -40,16 +41,16 @@ pub enum TypedTerm {
 }
 
 pub fn annotate(term: &Term) -> TypedTerm {
-    let (annotated_term, _) = annotate_term(term, 1);
+    let (annotated_term, _) = annotate_term(term, 1, &HashMap::new());
     annotated_term
 }
 
-fn annotate_term(term: &Term, order: u32) -> (TypedTerm, u32) {
+fn annotate_term(term: &Term, order: u32, env: &HashMap<String, Type>) -> (TypedTerm, u32) {
     match term {
         Term::FunctionApplication { function, argument } => {
-            let (typed_function, typed_function_order) = annotate_term(function, order + 1);
+            let (typed_function, typed_function_order) = annotate_term(function, order + 1, env);
             let (typed_argument, typed_argument_order) =
-                annotate_term(argument, typed_function_order + 1);
+                annotate_term(argument, typed_function_order + 1, env);
             (
                 TypedTerm::FunctionApplication {
                     ty: Type::Variable(order),
@@ -60,8 +61,16 @@ fn annotate_term(term: &Term, order: u32) -> (TypedTerm, u32) {
             )
         }
         Term::FunctionDefinition { parameter, body } => {
-            let (typed_parameter, typed_parameter_order) = annotate_term(parameter, order + 1);
-            let (typed_body, typed_body_order) = annotate_term(body, typed_parameter_order + 1);
+            let (typed_parameter, typed_parameter_order) = annotate_term(parameter, order + 1, env);
+            let mut extended_env = env.clone();
+            match &typed_parameter {
+                TypedTerm::Identifier { ty, name } => {
+                    extended_env.insert(name.clone(), ty.clone());
+                }
+                _ => unimplemented!(),
+            }
+            let (typed_body, typed_body_order) =
+                annotate_term(body, typed_parameter_order + 1, &extended_env);
             (
                 TypedTerm::FunctionDefinition {
                     ty: Type::Variable(order),
@@ -71,23 +80,32 @@ fn annotate_term(term: &Term, order: u32) -> (TypedTerm, u32) {
                 typed_body_order,
             )
         }
-        Term::Identifier(name) => (
-            TypedTerm::Identifier {
-                ty: Type::Variable(order),
-                name: name.clone(),
-            },
-            order,
-        ),
+        Term::Identifier(name) => match env.get(name) {
+            Some(existing_ty) => (
+                TypedTerm::Identifier {
+                    ty: existing_ty.clone(),
+                    name: name.clone(),
+                },
+                order - 1,
+            ),
+            None => (
+                TypedTerm::Identifier {
+                    ty: Type::Variable(order),
+                    name: name.clone(),
+                },
+                order,
+            ),
+        },
         Term::IfExpression {
             condition,
             true_branch,
             false_branch,
         } => {
-            let (typed_condition, typed_condition_order) = annotate_term(condition, order + 1);
+            let (typed_condition, typed_condition_order) = annotate_term(condition, order + 1, env);
             let (typed_true_branch, typed_true_branch_order) =
-                annotate_term(true_branch, typed_condition_order + 1);
+                annotate_term(true_branch, typed_condition_order + 1, env);
             let (typed_false_branch, typed_false_branch_order) =
-                annotate_term(false_branch, typed_true_branch_order + 1);
+                annotate_term(false_branch, typed_true_branch_order + 1, env);
             (
                 TypedTerm::IfExpression {
                     ty: Type::Variable(order),
@@ -111,11 +129,11 @@ fn annotate_term(term: &Term, order: u32) -> (TypedTerm, u32) {
             expression,
         } => {
             let (typed_declaration_name, typed_declaration_name_order) =
-                annotate_term(declaration_name, order + 1);
+                annotate_term(declaration_name, order + 1, env);
             let (typed_declaration_value, typed_declaration_value_order) =
-                annotate_term(declaration_value, typed_declaration_name_order + 1);
+                annotate_term(declaration_value, typed_declaration_name_order + 1, env);
             let (typed_expression, typed_expression_order) =
-                annotate_term(expression, typed_declaration_value_order + 1);
+                annotate_term(expression, typed_declaration_value_order + 1, env);
             (
                 TypedTerm::LetExpression {
                     ty: Type::Variable(order),
@@ -177,7 +195,7 @@ mod tests {
                     name: String::from("x"),
                 }),
                 body: Box::from(TypedTerm::Identifier {
-                    ty: Type::Variable(3),
+                    ty: Type::Variable(2),
                     name: String::from("x"),
                 }),
             }
@@ -237,24 +255,24 @@ mod tests {
                                 name: String::from("+")
                             }),
                             argument: Box::from(TypedTerm::Identifier {
-                                ty: Type::Variable(8),
+                                ty: Type::Variable(4),
                                 name: String::from("x")
                             })
                         }),
                         argument: Box::from(TypedTerm::Integer {
-                            ty: Type::Variable(9),
+                            ty: Type::Variable(8),
                             value: 1
                         })
                     }),
                 }),
                 expression: Box::from(TypedTerm::FunctionApplication {
-                    ty: Type::Variable(10),
+                    ty: Type::Variable(9),
                     function: Box::from(TypedTerm::Identifier {
-                        ty: Type::Variable(11),
+                        ty: Type::Variable(10),
                         name: String::from("inc")
                     }),
                     argument: Box::from(TypedTerm::Integer {
-                        ty: Type::Variable(12),
+                        ty: Type::Variable(11),
                         value: 42,
                     })
                 })
