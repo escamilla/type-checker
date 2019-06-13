@@ -16,12 +16,12 @@ pub enum Term {
         true_branch: Box<Term>,
         false_branch: Box<Term>,
     },
+    Integer(i32),
     LetExpression {
         declaration_name: Box<Term>,
         declaration_value: Box<Term>,
         expression: Box<Term>,
     },
-    Integer(i32),
 }
 
 pub fn parse(tokens: &Vec<Token>) -> Result<Term, String> {
@@ -50,7 +50,7 @@ fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
                                 },
                                 position,
                             )),
-                            Err(message) => Err(message),
+                            Err(_) => Ok((Term::Identifier(name.clone()), position + 1)),
                         }
                     }
                 } else {
@@ -107,7 +107,7 @@ fn parse_declaration_clause(
             _ => Err(format!("expected `val` keyword but got {:?}", token)),
         }
     } else {
-        Err(format!("expected `val` keyword but got nothing"))
+        Err(String::from("expected `val` keyword but got nothing"))
     }
 }
 
@@ -263,7 +263,7 @@ fn parse_identifier(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
             _ => Err(format!("expected identifier but got {:?}", token)),
         }
     } else {
-        Err(format!("expected identifier but got nothing"))
+        Err(String::from("expected identifier but got nothing"))
     }
 }
 
@@ -336,27 +336,23 @@ fn parse_integer_or_identifier(
 #[cfg(test)]
 mod tests {
     use crate::parser::{parse, parse_declaration_clause, Term};
-    use crate::tokenizer::Tokenizer;
+    use crate::tokenizer::tokenize;
 
     #[test]
     fn test_parse_integer() {
-        let mut tokenizer = Tokenizer::new("1");
-        let tokens = tokenizer.tokenize();
+        let tokens = tokenize("1");
         assert_eq!(parse(&tokens), Ok(Term::Integer(1)));
     }
 
     #[test]
     fn test_parse_identifier() {
-        let mut tokenizer = Tokenizer::new("x");
-        let tokens = tokenizer.tokenize();
+        let tokens = tokenize("x");
         assert_eq!(parse(&tokens), Ok(Term::Identifier(String::from("x"))));
     }
 
     #[test]
     fn test_parse_addition() {
-        let mut tokenizer = Tokenizer::new("x + 1");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("x + 1");
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionApplication {
@@ -371,9 +367,7 @@ mod tests {
 
     #[test]
     fn test_parse_subtraction() {
-        let mut tokenizer = Tokenizer::new("x - 1");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("x - 1");
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionApplication {
@@ -388,9 +382,7 @@ mod tests {
 
     #[test]
     fn test_parse_multiplication() {
-        let mut tokenizer = Tokenizer::new("x * 2");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("x * 2");
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionApplication {
@@ -405,9 +397,7 @@ mod tests {
 
     #[test]
     fn test_parse_division() {
-        let mut tokenizer = Tokenizer::new("x / 2");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("x / 2");
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionApplication {
@@ -422,9 +412,7 @@ mod tests {
 
     #[test]
     fn test_parse_identity_function() {
-        let mut tokenizer = Tokenizer::new("fn x => x");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("fn x => x");
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionDefinition {
@@ -436,9 +424,7 @@ mod tests {
 
     #[test]
     fn test_parse_increment_function() {
-        let mut tokenizer = Tokenizer::new("fn x => x + 1");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("fn x => x + 1");
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionDefinition {
@@ -456,9 +442,7 @@ mod tests {
 
     #[test]
     fn test_parse_if_expression() {
-        let mut tokenizer = Tokenizer::new("if x = y then 0 else 1");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("if x = y then 0 else 1");
         assert_eq!(
             parse(&tokens),
             Ok(Term::IfExpression {
@@ -477,9 +461,7 @@ mod tests {
 
     #[test]
     fn test_parse_declaration_clause() {
-        let mut tokenizer = Tokenizer::new("val inc = fn x => x + 1");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("val inc = fn x => x + 1");
         assert_eq!(
             parse_declaration_clause(&tokens, 0),
             Ok((
@@ -501,9 +483,7 @@ mod tests {
 
     #[test]
     fn test_parse_let_expression() {
-        let mut tokenizer = Tokenizer::new("let val inc = fn x => x + 1 in inc 42 end");
-        let tokens = tokenizer.tokenize();
-
+        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end");
         assert_eq!(
             parse(&tokens),
             Ok(Term::LetExpression {

@@ -18,17 +18,22 @@ pub enum Token {
     Times,
 }
 
-pub struct Tokenizer<'a> {
+pub fn tokenize(input: &str) -> Vec<Token> {
+    let mut tokenizer = Tokenizer::new(input);
+    tokenizer.tokenize()
+}
+
+struct Tokenizer<'a> {
     input: &'a str,
     position: usize,
 }
 
 impl<'a> Tokenizer<'a> {
-    pub fn new(input: &str) -> Tokenizer {
+    fn new(input: &str) -> Tokenizer {
         Tokenizer { input, position: 0 }
     }
 
-    pub fn tokenize(&mut self) -> Vec<Token> {
+    fn tokenize(&mut self) -> Vec<Token> {
         let mut tokens = Vec::new();
         while let Some(token) = self.next_token() {
             tokens.push(token);
@@ -154,55 +159,42 @@ impl<'a> Tokenizer<'a> {
 
 #[cfg(test)]
 mod tests {
-    use crate::tokenizer::{Token, Tokenizer};
+    use crate::tokenizer::{tokenize, Token};
 
     #[test]
     fn test_tokenize_single_character_identifier() {
-        let mut tokenizer = Tokenizer::new("p");
-        assert_eq!(
-            tokenizer.tokenize(),
-            vec![Token::Identifier(String::from("p"))]
-        );
+        assert_eq!(tokenize("p"), vec![Token::Identifier(String::from("p"))]);
     }
 
     #[test]
     fn test_tokenize_multi_character_identifier() {
-        let mut tokenizer = Tokenizer::new("pi");
-        assert_eq!(
-            tokenizer.tokenize(),
-            vec![Token::Identifier(String::from("pi"))]
-        );
+        assert_eq!(tokenize("pi"), vec![Token::Identifier(String::from("pi"))]);
     }
 
     #[test]
     fn test_tokenize_single_digit_integer() {
-        let mut tokenizer = Tokenizer::new("4");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Integer(4)]);
+        assert_eq!(tokenize("4"), vec![Token::Integer(4)]);
     }
 
     #[test]
     fn test_tokenize_multi_digit_integer() {
-        let mut tokenizer = Tokenizer::new("42");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Integer(42)]);
+        assert_eq!(tokenize("42"), vec![Token::Integer(42)]);
     }
 
     #[test]
     fn test_tokenize_negative_integer() {
-        let mut tokenizer = Tokenizer::new("-42");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Integer(-42)]);
+        assert_eq!(tokenize("-42"), vec![Token::Integer(-42)]);
     }
 
     #[test]
     fn test_tokenize_minus_and_integer() {
-        let mut tokenizer = Tokenizer::new("- 42");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Minus, Token::Integer(42)]);
+        assert_eq!(tokenize("- 42"), vec![Token::Minus, Token::Integer(42)]);
     }
 
     #[test]
     fn test_tokenize_math_operators() {
-        let mut tokenizer = Tokenizer::new("+ - * / =");
         assert_eq!(
-            tokenizer.tokenize(),
+            tokenize("+ - * / ="),
             vec![
                 Token::Plus,
                 Token::Minus,
@@ -215,30 +207,26 @@ mod tests {
 
     #[test]
     fn test_tokenize_arrow() {
-        let mut tokenizer = Tokenizer::new("=>");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Arrow]);
+        assert_eq!(tokenize("=>"), vec![Token::Arrow]);
     }
 
     #[test]
     fn test_tokenize_with_leading_and_trailing_whitespace() {
-        let mut tokenizer = Tokenizer::new(" 42 ");
-        assert_eq!(tokenizer.tokenize(), vec![Token::Integer(42)]);
+        assert_eq!(tokenize(" 42 "), vec![Token::Integer(42)]);
     }
 
     #[test]
     fn test_tokenize_multiline_string() {
-        let mut tokenizer = Tokenizer::new("1 +\n2");
         assert_eq!(
-            tokenizer.tokenize(),
+            tokenize("1 +\n2"),
             vec![Token::Integer(1), Token::Plus, Token::Integer(2)]
         );
     }
 
     #[test]
     fn test_tokenize_function_definition() {
-        let mut tokenizer = Tokenizer::new("fn x => x + 1");
         assert_eq!(
-            tokenizer.tokenize(),
+            tokenize("fn x => x + 1"),
             vec![
                 Token::KeywordFn,
                 Token::Identifier(String::from("x")),
@@ -252,9 +240,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_if_expression() {
-        let mut tokenizer = Tokenizer::new("if x = y then 0 else 1");
         assert_eq!(
-            tokenizer.tokenize(),
+            tokenize("if x = y then 0 else 1"),
             vec![
                 Token::KeywordIf,
                 Token::Identifier(String::from("x")),
@@ -270,9 +257,8 @@ mod tests {
 
     #[test]
     fn test_tokenize_let_expression() {
-        let mut tokenizer = Tokenizer::new("let val inc = fn x => x + 1 in inc 42 end");
         assert_eq!(
-            tokenizer.tokenize(),
+            tokenize("let val inc = fn x => x + 1 in inc 42 end"),
             vec![
                 Token::KeywordLet,
                 Token::KeywordVal,
