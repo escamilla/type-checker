@@ -4,6 +4,10 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub enum Type {
     Boolean,
+    Function {
+        parameter_type: Box<Type>,
+        return_type: Box<Type>,
+    },
     Integer,
     Variable(u32),
 }
