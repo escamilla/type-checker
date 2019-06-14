@@ -15,7 +15,43 @@ impl Display for Constraint {
 }
 
 pub fn collect_constraints(term: &TypedTerm) -> Vec<Constraint> {
-    collect_constraints_with_bindings(term, &HashMap::new())
+    let mut bindings = HashMap::new();
+    bindings.insert(
+        String::from("+"),
+        Type::Function {
+            parameter_type: Box::from(Type::Integer),
+            return_type: Box::from(Type::Integer),
+        },
+    );
+    bindings.insert(
+        String::from("-"),
+        Type::Function {
+            parameter_type: Box::from(Type::Integer),
+            return_type: Box::from(Type::Integer),
+        },
+    );
+    bindings.insert(
+        String::from("*"),
+        Type::Function {
+            parameter_type: Box::from(Type::Integer),
+            return_type: Box::from(Type::Integer),
+        },
+    );
+    bindings.insert(
+        String::from("/"),
+        Type::Function {
+            parameter_type: Box::from(Type::Integer),
+            return_type: Box::from(Type::Integer),
+        },
+    );
+    bindings.insert(
+        String::from("="),
+        Type::Function {
+            parameter_type: Box::from(Type::Integer),
+            return_type: Box::from(Type::Integer),
+        },
+    );
+    collect_constraints_with_bindings(term, &bindings)
 }
 
 fn collect_constraints_with_bindings(
@@ -272,6 +308,14 @@ mod tests {
                         return_type: Box::from(Type::Variable(4))
                     }
                 },
+                // type(+) === int -> int
+                Constraint {
+                    type1: Type::Variable(5),
+                    type2: Type::Function {
+                        parameter_type: Box::from(Type::Integer),
+                        return_type: Box::from(Type::Integer)
+                    }
+                },
                 // type(1) === integer
                 Constraint {
                     type1: Type::Variable(6),
@@ -322,6 +366,14 @@ mod tests {
                     type2: Type::Function {
                         parameter_type: Box::from(Type::Variable(4)),
                         return_type: Box::from(Type::Variable(6))
+                    }
+                },
+                // type(+) === int -> int
+                Constraint {
+                    type1: Type::Variable(7),
+                    type2: Type::Function {
+                        parameter_type: Box::from(Type::Integer),
+                        return_type: Box::from(Type::Integer)
                     }
                 },
                 // type(1) === integer
