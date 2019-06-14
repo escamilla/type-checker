@@ -1,5 +1,6 @@
 use crate::parser::Term;
 use std::collections::HashMap;
+use std::fmt::{Display, Error, Formatter};
 
 #[derive(Debug, Clone, Eq, Hash, PartialEq)]
 pub enum Type {
@@ -44,6 +45,59 @@ pub enum TypedTermKind {
         declaration_value: Box<TypedTerm>,
         expression: Box<TypedTerm>,
     },
+}
+
+impl Display for Type {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            Type::Boolean => write!(f, "bool"),
+            Type::Function {
+                parameter_type,
+                return_type,
+            } => write!(f, "{} => {}", parameter_type, return_type),
+            Type::Integer => write!(f, "int"),
+            Type::Variable(counter) => write!(f, "t{}", counter),
+        }
+    }
+}
+
+impl Display for TypedTerm {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        write!(f, "[{}]{}", self.ty, self.kind)
+    }
+}
+
+impl Display for TypedTermKind {
+    fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
+        match self {
+            TypedTermKind::FunctionApplication { function, argument } => {
+                write!(f, "{} {}", function, argument)
+            }
+            TypedTermKind::FunctionDefinition { parameter, body } => {
+                write!(f, "fn {} => {}", parameter, body)
+            }
+            TypedTermKind::Identifier { name } => write!(f, "{}", name),
+            TypedTermKind::IfExpression {
+                condition,
+                true_branch,
+                false_branch,
+            } => write!(
+                f,
+                "if {} then {} else {}",
+                condition, true_branch, false_branch
+            ),
+            TypedTermKind::Integer { value } => write!(f, "{}", value),
+            TypedTermKind::LetExpression {
+                declaration_name,
+                declaration_value,
+                expression,
+            } => write!(
+                f,
+                "let val {} = {} in {} end",
+                declaration_name, declaration_value, expression
+            ),
+        }
+    }
 }
 
 pub fn annotate(term: &Term) -> TypedTerm {
