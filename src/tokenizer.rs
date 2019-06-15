@@ -19,7 +19,7 @@ pub enum Token {
     Times,
 }
 
-pub fn tokenize(input: &str) -> Vec<Token> {
+pub fn tokenize(input: &str) -> Result<Vec<Token>, String> {
     let mut tokenizer = Tokenizer::new(input);
     tokenizer.tokenize()
 }
@@ -34,53 +34,53 @@ impl<'a> Tokenizer<'a> {
         Tokenizer { input, position: 0 }
     }
 
-    fn tokenize(&mut self) -> Vec<Token> {
+    fn tokenize(&mut self) -> Result<Vec<Token>, String> {
         let mut tokens = Vec::new();
-        while let Some(token) = self.next_token() {
+        while let Some(token) = self.next_token()? {
             tokens.push(token);
         }
-        tokens
+        Ok(tokens)
     }
 
-    fn next_token(&mut self) -> Option<Token> {
+    fn next_token(&mut self) -> Result<Option<Token>, String> {
         self.skip_whitespace();
         match self.next_char() {
             Some(c) => {
                 if c.is_alphabetic() {
-                    Some(self.read_identifier())
+                    Ok(Some(self.read_identifier()))
                 } else if c.is_numeric() {
-                    Some(self.read_integer())
+                    Ok(Some(self.read_integer()))
                 } else if c == '+' {
                     self.position += 1;
-                    Some(Token::Plus)
+                    Ok(Some(Token::Plus))
                 } else if c == '-' {
                     if let Some(c2) = self.peek_char() {
                         if c2.is_numeric() {
-                            return Some(self.read_integer());
+                            return Ok(Some(self.read_integer()));
                         }
                     }
                     self.position += 1;
-                    Some(Token::Minus)
+                    Ok(Some(Token::Minus))
                 } else if c == '*' {
                     self.position += 1;
-                    Some(Token::Times)
+                    Ok(Some(Token::Times))
                 } else if c == '/' {
                     self.position += 1;
-                    Some(Token::Divide)
+                    Ok(Some(Token::Divide))
                 } else if c == '=' {
                     if let Some(c2) = self.peek_char() {
                         if c2 == '>' {
                             self.position += 2;
-                            return Some(Token::Arrow);
+                            return Ok(Some(Token::Arrow));
                         }
                     }
                     self.position += 1;
-                    Some(Token::Equals)
+                    Ok(Some(Token::Equals))
                 } else {
-                    panic!("unexpected character: {}", c)
+                    Err(format!("unexpected character: {}", c))
                 }
             }
-            None => None,
+            None => Ok(None),
         }
     }
 
@@ -166,73 +166,79 @@ mod tests {
 
     #[test]
     fn test_tokenize_boolean_true() {
-        assert_eq!(tokenize("true"), vec![Token::Boolean(true)]);
+        assert_eq!(tokenize("true"), Ok(vec![Token::Boolean(true)]));
     }
 
     #[test]
     fn test_tokenize_boolean_false() {
-        assert_eq!(tokenize("false"), vec![Token::Boolean(false)]);
+        assert_eq!(tokenize("false"), Ok(vec![Token::Boolean(false)]));
     }
 
     #[test]
     fn test_tokenize_single_character_identifier() {
-        assert_eq!(tokenize("p"), vec![Token::Identifier(String::from("p"))]);
+        assert_eq!(
+            tokenize("p"),
+            Ok(vec![Token::Identifier(String::from("p"))])
+        );
     }
 
     #[test]
     fn test_tokenize_multi_character_identifier() {
-        assert_eq!(tokenize("pi"), vec![Token::Identifier(String::from("pi"))]);
+        assert_eq!(
+            tokenize("pi"),
+            Ok(vec![Token::Identifier(String::from("pi"))])
+        );
     }
 
     #[test]
     fn test_tokenize_single_digit_integer() {
-        assert_eq!(tokenize("4"), vec![Token::Integer(4)]);
+        assert_eq!(tokenize("4"), Ok(vec![Token::Integer(4)]));
     }
 
     #[test]
     fn test_tokenize_multi_digit_integer() {
-        assert_eq!(tokenize("42"), vec![Token::Integer(42)]);
+        assert_eq!(tokenize("42"), Ok(vec![Token::Integer(42)]));
     }
 
     #[test]
     fn test_tokenize_negative_integer() {
-        assert_eq!(tokenize("-42"), vec![Token::Integer(-42)]);
+        assert_eq!(tokenize("-42"), Ok(vec![Token::Integer(-42)]));
     }
 
     #[test]
     fn test_tokenize_minus_and_integer() {
-        assert_eq!(tokenize("- 42"), vec![Token::Minus, Token::Integer(42)]);
+        assert_eq!(tokenize("- 42"), Ok(vec![Token::Minus, Token::Integer(42)]));
     }
 
     #[test]
     fn test_tokenize_math_operators() {
         assert_eq!(
             tokenize("+ - * / ="),
-            vec![
+            Ok(vec![
                 Token::Plus,
                 Token::Minus,
                 Token::Times,
                 Token::Divide,
                 Token::Equals,
-            ]
+            ])
         );
     }
 
     #[test]
     fn test_tokenize_arrow() {
-        assert_eq!(tokenize("=>"), vec![Token::Arrow]);
+        assert_eq!(tokenize("=>"), Ok(vec![Token::Arrow]));
     }
 
     #[test]
     fn test_tokenize_with_leading_and_trailing_whitespace() {
-        assert_eq!(tokenize(" 42 "), vec![Token::Integer(42)]);
+        assert_eq!(tokenize(" 42 "), Ok(vec![Token::Integer(42)]));
     }
 
     #[test]
     fn test_tokenize_multiline_string() {
         assert_eq!(
             tokenize("1 +\n2"),
-            vec![Token::Integer(1), Token::Plus, Token::Integer(2)]
+            Ok(vec![Token::Integer(1), Token::Plus, Token::Integer(2)])
         );
     }
 
@@ -240,14 +246,14 @@ mod tests {
     fn test_tokenize_function_definition() {
         assert_eq!(
             tokenize("fn x => x + 1"),
-            vec![
+            Ok(vec![
                 Token::KeywordFn,
                 Token::Identifier(String::from("x")),
                 Token::Arrow,
                 Token::Identifier(String::from("x")),
                 Token::Plus,
                 Token::Integer(1),
-            ]
+            ])
         );
     }
 
@@ -255,7 +261,7 @@ mod tests {
     fn test_tokenize_if_expression() {
         assert_eq!(
             tokenize("if x = y then 0 else 1"),
-            vec![
+            Ok(vec![
                 Token::KeywordIf,
                 Token::Identifier(String::from("x")),
                 Token::Equals,
@@ -264,7 +270,7 @@ mod tests {
                 Token::Integer(0),
                 Token::KeywordElse,
                 Token::Integer(1)
-            ]
+            ])
         );
     }
 
@@ -272,7 +278,7 @@ mod tests {
     fn test_tokenize_let_expression() {
         assert_eq!(
             tokenize("let val inc = fn x => x + 1 in inc 42 end"),
-            vec![
+            Ok(vec![
                 Token::KeywordLet,
                 Token::KeywordVal,
                 Token::Identifier(String::from("inc")),
@@ -287,7 +293,7 @@ mod tests {
                 Token::Identifier(String::from("inc")),
                 Token::Integer(42),
                 Token::KeywordEnd,
-            ]
+            ])
         );
     }
 }

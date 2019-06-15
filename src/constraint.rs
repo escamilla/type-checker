@@ -160,18 +160,19 @@ mod tests {
     use std::iter::FromIterator;
 
     #[test]
-    fn test_collect_constraints_for_identifier() {
-        let tokens = tokenize("x");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+    fn test_collect_constraints_for_identifier() -> Result<(), String> {
+        let tokens = tokenize("x")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term);
         assert!(typed_term.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_collect_constraints_for_integer() {
-        let tokens = tokenize("42");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap()).unwrap();
+    fn test_collect_constraints_for_integer() -> Result<(), String> {
+        let tokens = tokenize("42")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term)?;
         let constraints = collect_constraints(&typed_term);
         assert_eq!(
             constraints,
@@ -181,13 +182,14 @@ mod tests {
                 type2: Type::Integer,
             }]
         );
+        Ok(())
     }
 
     #[test]
-    fn test_collect_constraints_for_if_expression() {
-        let tokens = tokenize("if true then 1 else 0");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap()).unwrap();
+    fn test_collect_constraints_for_if_expression() -> Result<(), String> {
+        let tokens = tokenize("if true then 1 else 0")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term)?;
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
@@ -224,13 +226,14 @@ mod tests {
                 },
             ])
         );
+        Ok(())
     }
 
     #[test]
-    fn test_collect_constraints_for_function_definition() {
-        let tokens = tokenize("fn x => x");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap()).unwrap();
+    fn test_collect_constraints_for_function_definition() -> Result<(), String> {
+        let tokens = tokenize("fn x => x")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term)?;
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
@@ -245,13 +248,15 @@ mod tests {
                 },
             ])
         );
+        Ok(())
     }
 
     #[test]
-    fn test_collect_constraints_for_function_definition_with_function_application() {
-        let tokens = tokenize("fn x => x + 1");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap()).unwrap();
+    fn test_collect_constraints_for_function_definition_with_function_application(
+    ) -> Result<(), String> {
+        let tokens = tokenize("fn x => x + 1")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term)?;
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
@@ -295,13 +300,14 @@ mod tests {
                 }
             ])
         );
+        Ok(())
     }
 
     #[test]
-    fn test_collect_constraints_for_let_expression() {
-        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap()).unwrap();
+    fn test_collect_constraints_for_let_expression() -> Result<(), String> {
+        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term)?;
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
@@ -368,5 +374,6 @@ mod tests {
                 }
             ])
         );
+        Ok(())
     }
 }

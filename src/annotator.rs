@@ -243,10 +243,10 @@ mod tests {
     use crate::tokenizer::tokenize;
 
     #[test]
-    fn test_annotate_integer() {
-        let tokens = tokenize("42");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+    fn test_annotate_integer() -> Result<(), String> {
+        let tokens = tokenize("42")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term);
         assert_eq!(
             typed_term,
             Ok(TypedTerm {
@@ -254,13 +254,14 @@ mod tests {
                 kind: TypedTermKind::Integer(42)
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_annotate_boolean_true() {
-        let tokens = tokenize("true");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+    fn test_annotate_boolean_true() -> Result<(), String> {
+        let tokens = tokenize("true")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term);
         assert_eq!(
             typed_term,
             Ok(TypedTerm {
@@ -268,13 +269,14 @@ mod tests {
                 kind: TypedTermKind::Boolean(true)
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_annotate_boolean_false() {
-        let tokens = tokenize("false");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+    fn test_annotate_boolean_false() -> Result<(), String> {
+        let tokens = tokenize("false")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term);
         assert_eq!(
             typed_term,
             Ok(TypedTerm {
@@ -282,21 +284,23 @@ mod tests {
                 kind: TypedTermKind::Boolean(false)
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_annotate_unbound_identifier() {
-        let tokens = tokenize("x");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+    fn test_annotate_unbound_identifier() -> Result<(), String> {
+        let tokens = tokenize("x")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term);
         assert!(typed_term.is_err());
+        Ok(())
     }
 
     #[test]
-    fn test_annotate_function_definition() {
-        let tokens = tokenize("fn x => x");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+    fn test_annotate_function_definition() -> Result<(), String> {
+        let tokens = tokenize("fn x => x")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term);
         assert_eq!(
             typed_term,
             Ok(TypedTerm {
@@ -313,13 +317,14 @@ mod tests {
                 }
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_annotate_if_expression() {
-        let tokens = tokenize("if true then 0 else 1");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+    fn test_annotate_if_expression() -> Result<(), String> {
+        let tokens = tokenize("if true then 0 else 1")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term);
         assert_eq!(
             typed_term,
             Ok(TypedTerm {
@@ -340,13 +345,14 @@ mod tests {
                 }
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_annotate_let_expression() {
-        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+    fn test_annotate_let_expression() -> Result<(), String> {
+        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end")?;
+        let term = parse(&tokens)?;
+        let typed_term = annotate(&term);
         assert_eq!(
             typed_term,
             Ok(TypedTerm {
@@ -403,5 +409,6 @@ mod tests {
                 }
             })
         );
+        Ok(())
     }
 }

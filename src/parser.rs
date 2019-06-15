@@ -341,32 +341,36 @@ mod tests {
     use crate::tokenizer::tokenize;
 
     #[test]
-    fn test_parse_integer() {
-        let tokens = tokenize("1");
+    fn test_parse_integer() -> Result<(), String> {
+        let tokens = tokenize("1")?;
         assert_eq!(parse(&tokens), Ok(Term::Integer(1)));
+        Ok(())
     }
 
     #[test]
-    fn test_parse_identifier() {
-        let tokens = tokenize("x");
+    fn test_parse_identifier() -> Result<(), String> {
+        let tokens = tokenize("x")?;
         assert_eq!(parse(&tokens), Ok(Term::Identifier(String::from("x"))));
+        Ok(())
     }
 
     #[test]
-    fn test_parse_boolean_true() {
-        let tokens = tokenize("true");
+    fn test_parse_boolean_true() -> Result<(), String> {
+        let tokens = tokenize("true")?;
         assert_eq!(parse(&tokens), Ok(Term::Boolean(true)));
+        Ok(())
     }
 
     #[test]
-    fn test_parse_boolean_false() {
-        let tokens = tokenize("false");
+    fn test_parse_boolean_false() -> Result<(), String> {
+        let tokens = tokenize("false")?;
         assert_eq!(parse(&tokens), Ok(Term::Boolean(false)));
+        Ok(())
     }
 
     #[test]
-    fn test_parse_addition() {
-        let tokens = tokenize("x + 1");
+    fn test_parse_addition() -> Result<(), String> {
+        let tokens = tokenize("x + 1")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionApplication {
@@ -377,11 +381,12 @@ mod tests {
                 argument: Box::from(Term::Integer(1))
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_subtraction() {
-        let tokens = tokenize("x - 1");
+    fn test_parse_subtraction() -> Result<(), String> {
+        let tokens = tokenize("x - 1")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionApplication {
@@ -392,11 +397,12 @@ mod tests {
                 argument: Box::from(Term::Integer(1))
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_multiplication() {
-        let tokens = tokenize("x * 2");
+    fn test_parse_multiplication() -> Result<(), String> {
+        let tokens = tokenize("x * 2")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionApplication {
@@ -407,11 +413,12 @@ mod tests {
                 argument: Box::from(Term::Integer(2))
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_division() {
-        let tokens = tokenize("x / 2");
+    fn test_parse_division() -> Result<(), String> {
+        let tokens = tokenize("x / 2")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionApplication {
@@ -422,11 +429,12 @@ mod tests {
                 argument: Box::from(Term::Integer(2))
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_identity_function() {
-        let tokens = tokenize("fn x => x");
+    fn test_parse_identity_function() -> Result<(), String> {
+        let tokens = tokenize("fn x => x")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionDefinition {
@@ -434,11 +442,12 @@ mod tests {
                 body: Box::from(Term::Identifier(String::from("x")))
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_increment_function() {
-        let tokens = tokenize("fn x => x + 1");
+    fn test_parse_increment_function() -> Result<(), String> {
+        let tokens = tokenize("fn x => x + 1")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::FunctionDefinition {
@@ -452,11 +461,12 @@ mod tests {
                 })
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_if_expression() {
-        let tokens = tokenize("if x = y then 0 else 1");
+    fn test_parse_if_expression() -> Result<(), String> {
+        let tokens = tokenize("if x = y then 0 else 1")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::IfExpression {
@@ -471,11 +481,12 @@ mod tests {
                 false_branch: Box::from(Term::Integer(1)),
             })
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_declaration_clause() {
-        let tokens = tokenize("val inc = fn x => x + 1");
+    fn test_parse_declaration_clause() -> Result<(), String> {
+        let tokens = tokenize("val inc = fn x => x + 1")?;
         assert_eq!(
             parse_declaration_clause(&tokens, 0),
             Ok((
@@ -493,11 +504,12 @@ mod tests {
                 tokens.len()
             )),
         );
+        Ok(())
     }
 
     #[test]
-    fn test_parse_let_expression() {
-        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end");
+    fn test_parse_let_expression() -> Result<(), String> {
+        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::LetExpression {
@@ -518,5 +530,6 @@ mod tests {
                 })
             })
         );
+        Ok(())
     }
 }
