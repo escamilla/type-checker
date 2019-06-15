@@ -99,10 +99,8 @@ impl Display for TypedTermKind {
 }
 
 pub fn annotate(term: &Term) -> Result<TypedTerm, String> {
-    match annotate_term(term, 1, &HashMap::new()) {
-        Ok((annotated_term, _)) => Ok(annotated_term),
-        Err(message) => Err(message),
-    }
+    let (annotated_term, _) = annotate_term(term, 1, &HashMap::new())?;
+    Ok(annotated_term)
 }
 
 fn annotate_term(
