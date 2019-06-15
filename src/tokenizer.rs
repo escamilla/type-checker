@@ -1,6 +1,7 @@
 #[derive(Debug, PartialEq)]
 pub enum Token {
     Arrow,
+    Boolean(bool),
     Divide,
     Equals,
     Identifier(String),
@@ -124,6 +125,8 @@ impl<'a> Tokenizer<'a> {
             }
         }
         match buffer.as_str() {
+            "true" => Token::Boolean(true),
+            "false" => Token::Boolean(false),
             "else" => Token::KeywordElse,
             "end" => Token::KeywordEnd,
             "fn" => Token::KeywordFn,
@@ -160,6 +163,16 @@ impl<'a> Tokenizer<'a> {
 #[cfg(test)]
 mod tests {
     use crate::tokenizer::{tokenize, Token};
+
+    #[test]
+    fn test_tokenize_boolean_true() {
+        assert_eq!(tokenize("true"), vec![Token::Boolean(true)]);
+    }
+
+    #[test]
+    fn test_tokenize_boolean_false() {
+        assert_eq!(tokenize("false"), vec![Token::Boolean(false)]);
+    }
 
     #[test]
     fn test_tokenize_single_character_identifier() {

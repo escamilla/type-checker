@@ -10,7 +10,7 @@ pub enum Type {
         return_type: Box<Type>,
     },
     Integer,
-    Variable(u32),
+    Placeholder(u32),
 }
 
 #[derive(Debug, PartialEq)]
@@ -21,6 +21,7 @@ pub struct TypedTerm {
 
 #[derive(Debug, PartialEq)]
 pub enum TypedTermKind {
+    Boolean(bool),
     FunctionApplication {
         function: Box<TypedTerm>,
         argument: Box<TypedTerm>,
@@ -29,17 +30,13 @@ pub enum TypedTermKind {
         parameter: Box<TypedTerm>,
         body: Box<TypedTerm>,
     },
-    Identifier {
-        name: String,
-    },
+    Identifier(String),
     IfExpression {
         condition: Box<TypedTerm>,
         true_branch: Box<TypedTerm>,
         false_branch: Box<TypedTerm>,
     },
-    Integer {
-        value: i32,
-    },
+    Integer(i32),
     LetExpression {
         declaration_name: Box<TypedTerm>,
         declaration_value: Box<TypedTerm>,
@@ -56,27 +53,28 @@ impl Display for Type {
                 return_type,
             } => write!(f, "{} => {}", parameter_type, return_type),
             Type::Integer => write!(f, "int"),
-            Type::Variable(counter) => write!(f, "t{}", counter),
+            Type::Placeholder(counter) => write!(f, "t{}", counter),
         }
     }
 }
 
 impl Display for TypedTerm {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
-        write!(f, "[{}]{}", self.ty, self.kind)
+        write!(f, "<{}>{}</{}>", self.ty, self.kind, self.ty)
     }
 }
 
 impl Display for TypedTermKind {
     fn fmt(&self, f: &mut Formatter) -> Result<(), Error> {
         match self {
+            TypedTermKind::Boolean(value) => write!(f, "{}", value),
             TypedTermKind::FunctionApplication { function, argument } => {
                 write!(f, "{} {}", function, argument)
             }
             TypedTermKind::FunctionDefinition { parameter, body } => {
                 write!(f, "fn {} => {}", parameter, body)
             }
-            TypedTermKind::Identifier { name } => write!(f, "{}", name),
+            TypedTermKind::Identifier(name) => write!(f, "{}", name),
             TypedTermKind::IfExpression {
                 condition,
                 true_branch,
@@ -86,7 +84,7 @@ impl Display for TypedTermKind {
                 "if {} then {} else {}",
                 condition, true_branch, false_branch
             ),
-            TypedTermKind::Integer { value } => write!(f, "{}", value),
+            TypedTermKind::Integer(value) => write!(f, "{}", value),
             TypedTermKind::LetExpression {
                 declaration_name,
                 declaration_value,
@@ -100,117 +98,140 @@ impl Display for TypedTermKind {
     }
 }
 
-pub fn annotate(term: &Term) -> TypedTerm {
-    let (annotated_term, _) = annotate_term(term, 1, &HashMap::new());
-    annotated_term
+pub fn annotate(term: &Term) -> Result<TypedTerm, String> {
+    match annotate_term(term, 1, &HashMap::new()) {
+        Ok((annotated_term, _)) => Ok(annotated_term),
+        Err(message) => Err(message),
+    }
 }
 
-fn annotate_term(term: &Term, order: u32, env: &HashMap<String, Type>) -> (TypedTerm, u32) {
+fn annotate_term(
+    term: &Term,
+    counter: u32,
+    env: &HashMap<String, Type>,
+) -> Result<(TypedTerm, u32), String> {
     match term {
+        Term::Boolean(value) => Ok((
+            TypedTerm {
+                ty: Type::Placeholder(counter),
+                kind: TypedTermKind::Boolean(*value),
+            },
+            counter,
+        )),
         Term::FunctionApplication { function, argument } => {
-            let (typed_function, typed_function_order) = annotate_term(function, order + 1, env);
-            let (typed_argument, typed_argument_order) =
-                annotate_term(argument, typed_function_order + 1, env);
-            (
+            let (typed_function, typed_function_counter) =
+                annotate_term(function, counter + 1, env)?;
+            let (typed_argument, typed_argument_counter) =
+                annotate_term(argument, typed_function_counter + 1, env)?;
+            Ok((
                 TypedTerm {
-                    ty: Type::Variable(order),
+                    ty: Type::Placeholder(counter),
                     kind: TypedTermKind::FunctionApplication {
                         function: Box::from(typed_function),
                         argument: Box::from(typed_argument),
                     },
                 },
-                typed_argument_order,
-            )
+                typed_argument_counter,
+            ))
         }
         Term::FunctionDefinition { parameter, body } => {
-            let (typed_parameter, typed_parameter_order) = annotate_term(parameter, order + 1, env);
             let mut extended_env = env.clone();
-            match &typed_parameter.kind {
-                TypedTermKind::Identifier { name } => {
-                    extended_env.insert(name.clone(), typed_parameter.ty.clone());
-                }
-                _ => unimplemented!(),
+            if let Term::Identifier(name) = *parameter.clone() {
+                extended_env.insert(name.clone(), Type::Placeholder(counter + 1));
             }
-            let (typed_body, typed_body_order) =
-                annotate_term(body, typed_parameter_order + 1, &extended_env);
-            (
+            let (typed_parameter, typed_parameter_counter) =
+                annotate_term(parameter, counter + 2, &extended_env)?;
+            let (typed_body, typed_body_counter) =
+                annotate_term(body, typed_parameter_counter + 1, &extended_env)?;
+            Ok((
                 TypedTerm {
-                    ty: Type::Variable(order),
+                    ty: Type::Placeholder(counter),
                     kind: TypedTermKind::FunctionDefinition {
                         parameter: Box::from(typed_parameter),
                         body: Box::from(typed_body),
                     },
                 },
-                typed_body_order,
-            )
+                typed_body_counter,
+            ))
         }
         Term::Identifier(name) => match env.get(name) {
-            Some(existing_ty) => (
+            Some(existing_ty) => Ok((
                 TypedTerm {
                     ty: existing_ty.clone(),
-                    kind: TypedTermKind::Identifier { name: name.clone() },
+                    kind: TypedTermKind::Identifier(name.clone()),
                 },
-                order - 1,
-            ),
-            None => (
-                TypedTerm {
-                    ty: Type::Variable(order),
-                    kind: TypedTermKind::Identifier { name: name.clone() },
-                },
-                order,
-            ),
+                counter - 1,
+            )),
+            None => match name.as_ref() {
+                "+" | "-" | "*" | "/" => Ok((
+                    TypedTerm {
+                        ty: Type::Placeholder(counter),
+                        kind: TypedTermKind::Identifier(name.clone()),
+                    },
+                    counter,
+                )),
+                _ => Err(format!("unbound identifier: {}", name)),
+            },
         },
         Term::IfExpression {
             condition,
             true_branch,
             false_branch,
         } => {
-            let (typed_condition, typed_condition_order) = annotate_term(condition, order + 1, env);
-            let (typed_true_branch, typed_true_branch_order) =
-                annotate_term(true_branch, typed_condition_order + 1, env);
-            let (typed_false_branch, typed_false_branch_order) =
-                annotate_term(false_branch, typed_true_branch_order + 1, env);
-            (
+            let (typed_condition, typed_condition_counter) =
+                annotate_term(condition, counter + 1, env)?;
+            let (typed_true_branch, typed_true_branch_counter) =
+                annotate_term(true_branch, typed_condition_counter + 1, env)?;
+            let (typed_false_branch, typed_false_branch_counter) =
+                annotate_term(false_branch, typed_true_branch_counter + 1, env)?;
+            Ok((
                 TypedTerm {
-                    ty: Type::Variable(order),
+                    ty: Type::Placeholder(counter),
                     kind: TypedTermKind::IfExpression {
                         condition: Box::from(typed_condition),
                         true_branch: Box::from(typed_true_branch),
                         false_branch: Box::from(typed_false_branch),
                     },
                 },
-                typed_false_branch_order,
-            )
+                typed_false_branch_counter,
+            ))
         }
-        Term::Integer(value) => (
+        Term::Integer(value) => Ok((
             TypedTerm {
-                ty: Type::Variable(order),
-                kind: TypedTermKind::Integer { value: *value },
+                ty: Type::Placeholder(counter),
+                kind: TypedTermKind::Integer(*value),
             },
-            order,
-        ),
+            counter,
+        )),
         Term::LetExpression {
             declaration_name,
             declaration_value,
             expression,
         } => {
-            let (typed_declaration_name, typed_declaration_name_order) =
-                annotate_term(declaration_name, order + 1, env);
-            let (typed_declaration_value, typed_declaration_value_order) =
-                annotate_term(declaration_value, typed_declaration_name_order + 1, env);
-            let (typed_expression, typed_expression_order) =
-                annotate_term(expression, typed_declaration_value_order + 1, env);
-            (
+            let mut extended_env = env.clone();
+            if let Term::Identifier(name) = *declaration_name.clone() {
+                extended_env.insert(name.clone(), Type::Placeholder(counter + 1));
+            }
+            let (typed_declaration_name, typed_declaration_name_counter) =
+                annotate_term(declaration_name, counter + 2, &extended_env)?;
+            let (typed_declaration_value, typed_declaration_value_counter) =
+                annotate_term(declaration_value, typed_declaration_name_counter + 1, env)?;
+            let (typed_expression, typed_expression_counter) = annotate_term(
+                expression,
+                typed_declaration_value_counter + 1,
+                &extended_env,
+            )?;
+            Ok((
                 TypedTerm {
-                    ty: Type::Variable(order),
+                    ty: Type::Placeholder(counter),
                     kind: TypedTermKind::LetExpression {
                         declaration_name: Box::from(typed_declaration_name),
                         declaration_value: Box::from(typed_declaration_value),
                         expression: Box::from(typed_expression),
                     },
                 },
-                typed_expression_order,
-            )
+                typed_expression_counter,
+            ))
         }
     }
 }
@@ -228,27 +249,47 @@ mod tests {
         let typed_term = annotate(&term.unwrap());
         assert_eq!(
             typed_term,
-            TypedTerm {
-                ty: Type::Variable(1),
-                kind: TypedTermKind::Integer { value: 42 }
-            }
+            Ok(TypedTerm {
+                ty: Type::Placeholder(1),
+                kind: TypedTermKind::Integer(42)
+            })
         );
     }
 
     #[test]
-    fn test_annotate_identifier() {
-        let tokens = tokenize("x");
+    fn test_annotate_boolean_true() {
+        let tokens = tokenize("true");
         let term = parse(&tokens);
         let typed_term = annotate(&term.unwrap());
         assert_eq!(
             typed_term,
-            TypedTerm {
-                ty: Type::Variable(1),
-                kind: TypedTermKind::Identifier {
-                    name: String::from("x"),
-                }
-            }
+            Ok(TypedTerm {
+                ty: Type::Placeholder(1),
+                kind: TypedTermKind::Boolean(true)
+            })
         );
+    }
+
+    #[test]
+    fn test_annotate_boolean_false() {
+        let tokens = tokenize("false");
+        let term = parse(&tokens);
+        let typed_term = annotate(&term.unwrap());
+        assert_eq!(
+            typed_term,
+            Ok(TypedTerm {
+                ty: Type::Placeholder(1),
+                kind: TypedTermKind::Boolean(false)
+            })
+        );
+    }
+
+    #[test]
+    fn test_annotate_unbound_identifier() {
+        let tokens = tokenize("x");
+        let term = parse(&tokens);
+        let typed_term = annotate(&term.unwrap());
+        assert!(typed_term.is_err());
     }
 
     #[test]
@@ -258,58 +299,46 @@ mod tests {
         let typed_term = annotate(&term.unwrap());
         assert_eq!(
             typed_term,
-            TypedTerm {
-                ty: Type::Variable(1),
+            Ok(TypedTerm {
+                ty: Type::Placeholder(1),
                 kind: TypedTermKind::FunctionDefinition {
                     parameter: Box::from(TypedTerm {
-                        ty: Type::Variable(2),
-                        kind: {
-                            TypedTermKind::Identifier {
-                                name: String::from("x"),
-                            }
-                        }
+                        ty: Type::Placeholder(2),
+                        kind: TypedTermKind::Identifier(String::from("x"))
                     }),
                     body: Box::from(TypedTerm {
-                        ty: Type::Variable(2),
-                        kind: {
-                            TypedTermKind::Identifier {
-                                name: String::from("x"),
-                            }
-                        }
+                        ty: Type::Placeholder(2),
+                        kind: TypedTermKind::Identifier(String::from("x"))
                     }),
                 }
-            }
+            })
         );
     }
 
     #[test]
-    fn test_annotate_simple_if_expression() {
-        let tokens = tokenize("if x then 0 else 1");
+    fn test_annotate_if_expression() {
+        let tokens = tokenize("if true then 0 else 1");
         let term = parse(&tokens);
         let typed_term = annotate(&term.unwrap());
         assert_eq!(
             typed_term,
-            TypedTerm {
-                ty: Type::Variable(1),
+            Ok(TypedTerm {
+                ty: Type::Placeholder(1),
                 kind: TypedTermKind::IfExpression {
                     condition: Box::from(TypedTerm {
-                        ty: Type::Variable(2),
-                        kind: {
-                            TypedTermKind::Identifier {
-                                name: String::from("x"),
-                            }
-                        }
+                        ty: Type::Placeholder(2),
+                        kind: TypedTermKind::Boolean(true)
                     }),
                     true_branch: Box::from(TypedTerm {
-                        ty: Type::Variable(3),
-                        kind: { TypedTermKind::Integer { value: 0 } }
+                        ty: Type::Placeholder(3),
+                        kind: TypedTermKind::Integer(0)
                     }),
                     false_branch: Box::from(TypedTerm {
-                        ty: Type::Variable(4),
-                        kind: { TypedTermKind::Integer { value: 1 } }
+                        ty: Type::Placeholder(4),
+                        kind: TypedTermKind::Integer(1)
                     }),
                 }
-            }
+            })
         );
     }
 
@@ -320,69 +349,59 @@ mod tests {
         let typed_term = annotate(&term.unwrap());
         assert_eq!(
             typed_term,
-            TypedTerm {
-                ty: Type::Variable(1),
+            Ok(TypedTerm {
+                ty: Type::Placeholder(1),
                 kind: TypedTermKind::LetExpression {
                     declaration_name: Box::from(TypedTerm {
-                        ty: Type::Variable(2),
-                        kind: TypedTermKind::Identifier {
-                            name: String::from("inc"),
-                        }
+                        ty: Type::Placeholder(2),
+                        kind: TypedTermKind::Identifier(String::from("inc"))
                     }),
                     declaration_value: Box::from(TypedTerm {
-                        ty: Type::Variable(3),
+                        ty: Type::Placeholder(3),
                         kind: TypedTermKind::FunctionDefinition {
                             parameter: Box::from(TypedTerm {
-                                ty: Type::Variable(4),
-                                kind: TypedTermKind::Identifier {
-                                    name: String::from("x"),
-                                }
+                                ty: Type::Placeholder(4),
+                                kind: TypedTermKind::Identifier(String::from("x"))
                             }),
                             body: Box::from(TypedTerm {
-                                ty: Type::Variable(5),
+                                ty: Type::Placeholder(5),
                                 kind: TypedTermKind::FunctionApplication {
                                     function: Box::from(TypedTerm {
-                                        ty: Type::Variable(6),
+                                        ty: Type::Placeholder(6),
                                         kind: TypedTermKind::FunctionApplication {
                                             function: Box::from(TypedTerm {
-                                                ty: Type::Variable(7),
-                                                kind: TypedTermKind::Identifier {
-                                                    name: String::from("+"),
-                                                }
+                                                ty: Type::Placeholder(7),
+                                                kind: TypedTermKind::Identifier(String::from("+"))
                                             }),
                                             argument: Box::from(TypedTerm {
-                                                ty: Type::Variable(4),
-                                                kind: TypedTermKind::Identifier {
-                                                    name: String::from("x"),
-                                                }
+                                                ty: Type::Placeholder(4),
+                                                kind: TypedTermKind::Identifier(String::from("x"))
                                             })
                                         }
                                     }),
                                     argument: Box::from(TypedTerm {
-                                        ty: Type::Variable(8),
-                                        kind: { TypedTermKind::Integer { value: 1 } }
+                                        ty: Type::Placeholder(8),
+                                        kind: TypedTermKind::Integer(1)
                                     })
                                 }
                             }),
                         }
                     }),
                     expression: Box::from(TypedTerm {
-                        ty: Type::Variable(9),
+                        ty: Type::Placeholder(9),
                         kind: TypedTermKind::FunctionApplication {
                             function: Box::from(TypedTerm {
-                                ty: Type::Variable(10),
-                                kind: TypedTermKind::Identifier {
-                                    name: String::from("inc"),
-                                }
+                                ty: Type::Placeholder(2),
+                                kind: TypedTermKind::Identifier(String::from("inc"))
                             }),
                             argument: Box::from(TypedTerm {
-                                ty: Type::Variable(11),
-                                kind: { TypedTermKind::Integer { value: 42 } }
+                                ty: Type::Placeholder(10),
+                                kind: TypedTermKind::Integer(42)
                             })
                         }
                     })
                 }
-            }
+            })
         );
     }
 }

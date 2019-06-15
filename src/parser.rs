@@ -1,7 +1,8 @@
 use crate::tokenizer::Token;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Term {
+    Boolean(bool),
     FunctionApplication {
         function: Box<Term>,
         argument: Box<Term>,
@@ -34,9 +35,7 @@ pub fn parse(tokens: &Vec<Token>) -> Result<Term, String> {
 fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
     if let Some(token) = tokens.get(position) {
         match token {
-            Token::KeywordFn => parse_function_definition(tokens, position),
-            Token::KeywordIf => parse_if_expression(tokens, position),
-            Token::KeywordLet => parse_let_expression(tokens, position),
+            Token::Boolean(value) => Ok((Term::Boolean(*value), position + 1)),
             Token::Identifier(name) => {
                 if let Some(next_token) = tokens.get(position + 1) {
                     if is_binary_operator(next_token) {
@@ -68,6 +67,9 @@ fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
                     Ok((Term::Integer(*value), position + 1))
                 }
             }
+            Token::KeywordFn => parse_function_definition(tokens, position),
+            Token::KeywordIf => parse_if_expression(tokens, position),
+            Token::KeywordLet => parse_let_expression(tokens, position),
             _ => Err(format!(
                 "expected `fn` keyword, `if` keyword, identifier, or integer but got {:?}",
                 token,
@@ -348,6 +350,18 @@ mod tests {
     fn test_parse_identifier() {
         let tokens = tokenize("x");
         assert_eq!(parse(&tokens), Ok(Term::Identifier(String::from("x"))));
+    }
+
+    #[test]
+    fn test_parse_boolean_true() {
+        let tokens = tokenize("true");
+        assert_eq!(parse(&tokens), Ok(Term::Boolean(true)));
+    }
+
+    #[test]
+    fn test_parse_boolean_false() {
+        let tokens = tokenize("false");
+        assert_eq!(parse(&tokens), Ok(Term::Boolean(false)));
     }
 
     #[test]

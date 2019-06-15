@@ -59,6 +59,10 @@ fn collect_constraints_with_bindings(
     bindings: &HashMap<String, Type>,
 ) -> Vec<Constraint> {
     match &term.kind {
+        TypedTermKind::Boolean(_) => vec![Constraint {
+            type1: term.ty.clone(),
+            type2: Type::Boolean,
+        }],
         TypedTermKind::FunctionApplication { function, argument } => {
             let mut constraints = vec![Constraint {
                 type1: function.ty.clone(),
@@ -82,7 +86,7 @@ fn collect_constraints_with_bindings(
             constraints.extend(collect_constraints_with_bindings(body, bindings));
             constraints
         }
-        TypedTermKind::Identifier { name } => match bindings.get(name) {
+        TypedTermKind::Identifier(name) => match bindings.get(name) {
             Some(ty) => vec![Constraint {
                 type1: term.ty.clone(),
                 type2: ty.clone(),
@@ -136,21 +140,11 @@ fn collect_constraints_with_bindings(
                     type2: declaration_value.ty.clone(),
                 },
             ];
-            let mut extended_bindings = bindings.clone();
-            match &declaration_name.kind {
-                TypedTermKind::Identifier { name } => {
-                    extended_bindings.insert(name.clone(), declaration_name.ty.clone());
-                }
-                _ => (),
-            }
             constraints.extend(collect_constraints_with_bindings(
                 declaration_value,
                 bindings,
             ));
-            constraints.extend(collect_constraints_with_bindings(
-                expression,
-                &extended_bindings,
-            ));
+            constraints.extend(collect_constraints_with_bindings(expression, bindings));
             constraints
         }
     }
@@ -170,21 +164,20 @@ mod tests {
         let tokens = tokenize("x");
         let term = parse(&tokens);
         let typed_term = annotate(&term.unwrap());
-        let constraints = collect_constraints(&typed_term);
-        assert_eq!(constraints, vec![]);
+        assert!(typed_term.is_err());
     }
 
     #[test]
     fn test_collect_constraints_for_integer() {
         let tokens = tokenize("42");
         let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+        let typed_term = annotate(&term.unwrap()).unwrap();
         let constraints = collect_constraints(&typed_term);
         assert_eq!(
             constraints,
             vec![Constraint {
                 // type(42) === integer
-                type1: Type::Variable(1),
+                type1: Type::Placeholder(1),
                 type2: Type::Integer,
             }]
         );
@@ -192,41 +185,41 @@ mod tests {
 
     #[test]
     fn test_collect_constraints_for_if_expression() {
-        let tokens = tokenize("if x then 1 else 0");
+        let tokens = tokenize("if true then 1 else 0");
         let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+        let typed_term = annotate(&term.unwrap()).unwrap();
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
             HashSet::from_iter(vec![
                 // type(if x then 1 else 0) === type(1)
                 Constraint {
-                    type1: Type::Variable(1),
-                    type2: Type::Variable(3),
+                    type1: Type::Placeholder(1),
+                    type2: Type::Placeholder(3),
                 },
                 // type(if x then 1 else 0) === type(0)
                 Constraint {
-                    type1: Type::Variable(1),
-                    type2: Type::Variable(4),
+                    type1: Type::Placeholder(1),
+                    type2: Type::Placeholder(4),
                 },
                 // type(x) === boolean
                 Constraint {
-                    type1: Type::Variable(2),
+                    type1: Type::Placeholder(2),
                     type2: Type::Boolean,
                 },
                 // type(1) === type(0)
                 Constraint {
-                    type1: Type::Variable(3),
-                    type2: Type::Variable(4),
+                    type1: Type::Placeholder(3),
+                    type2: Type::Placeholder(4),
                 },
                 // type(1) === integer
                 Constraint {
-                    type1: Type::Variable(3),
+                    type1: Type::Placeholder(3),
                     type2: Type::Integer,
                 },
                 // type(0) === integer
                 Constraint {
-                    type1: Type::Variable(4),
+                    type1: Type::Placeholder(4),
                     type2: Type::Integer,
                 },
             ])
@@ -237,38 +230,17 @@ mod tests {
     fn test_collect_constraints_for_function_definition() {
         let tokens = tokenize("fn x => x");
         let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+        let typed_term = annotate(&term.unwrap()).unwrap();
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
             HashSet::from_iter(vec![
                 // type(fn x => x) === type(x) -> type(x)
                 Constraint {
-                    type1: Type::Variable(1),
+                    type1: Type::Placeholder(1),
                     type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(2)),
-                        return_type: Box::from(Type::Variable(2))
-                    }
-                },
-            ])
-        );
-    }
-
-    #[test]
-    fn test_collect_constraints_for_function_application() {
-        let tokens = tokenize("inc x");
-        let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
-        let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
-        assert_eq!(
-            constraints,
-            HashSet::from_iter(vec![
-                // type(inc) === type(x) -> type(inc x)
-                Constraint {
-                    type1: Type::Variable(2),
-                    type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(3)),
-                        return_type: Box::from(Type::Variable(1))
+                        parameter_type: Box::from(Type::Placeholder(2)),
+                        return_type: Box::from(Type::Placeholder(2))
                     }
                 },
             ])
@@ -279,38 +251,38 @@ mod tests {
     fn test_collect_constraints_for_function_definition_with_function_application() {
         let tokens = tokenize("fn x => x + 1");
         let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+        let typed_term = annotate(&term.unwrap()).unwrap();
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
             HashSet::from_iter(vec![
                 // type(fn x => x + 1) === type(x) -> type(x + 1)
                 Constraint {
-                    type1: Type::Variable(1),
+                    type1: Type::Placeholder(1),
                     type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(2)),
-                        return_type: Box::from(Type::Variable(3))
+                        parameter_type: Box::from(Type::Placeholder(2)),
+                        return_type: Box::from(Type::Placeholder(3))
                     }
                 },
                 // type(+ x) === type(1) -> type(+ x 1)
                 Constraint {
-                    type1: Type::Variable(4),
+                    type1: Type::Placeholder(4),
                     type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(6)),
-                        return_type: Box::from(Type::Variable(3))
+                        parameter_type: Box::from(Type::Placeholder(6)),
+                        return_type: Box::from(Type::Placeholder(3))
                     }
                 },
                 // type(+) === type(x) -> type(+ x)
                 Constraint {
-                    type1: Type::Variable(5),
+                    type1: Type::Placeholder(5),
                     type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(2)),
-                        return_type: Box::from(Type::Variable(4))
+                        parameter_type: Box::from(Type::Placeholder(2)),
+                        return_type: Box::from(Type::Placeholder(4))
                     }
                 },
                 // type(+) === int -> int
                 Constraint {
-                    type1: Type::Variable(5),
+                    type1: Type::Placeholder(5),
                     type2: Type::Function {
                         parameter_type: Box::from(Type::Integer),
                         return_type: Box::from(Type::Integer)
@@ -318,7 +290,7 @@ mod tests {
                 },
                 // type(1) === integer
                 Constraint {
-                    type1: Type::Variable(6),
+                    type1: Type::Placeholder(6),
                     type2: Type::Integer,
                 }
             ])
@@ -329,48 +301,48 @@ mod tests {
     fn test_collect_constraints_for_let_expression() {
         let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end");
         let term = parse(&tokens);
-        let typed_term = annotate(&term.unwrap());
+        let typed_term = annotate(&term.unwrap()).unwrap();
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
             HashSet::from_iter(vec![
                 // type(let...end) === type(inc 42)
                 Constraint {
-                    type1: Type::Variable(1),
-                    type2: Type::Variable(9),
+                    type1: Type::Placeholder(1),
+                    type2: Type::Placeholder(9),
                 },
                 // type(inc) === type(fn x => x + 1)
                 Constraint {
-                    type1: Type::Variable(2),
-                    type2: Type::Variable(3),
+                    type1: Type::Placeholder(2),
+                    type2: Type::Placeholder(3),
                 },
                 // type(fn x => x + 1) === type(x) -> type(+ x 1)
                 Constraint {
-                    type1: Type::Variable(3),
+                    type1: Type::Placeholder(3),
                     type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(4)),
-                        return_type: Box::from(Type::Variable(5))
+                        parameter_type: Box::from(Type::Placeholder(4)),
+                        return_type: Box::from(Type::Placeholder(5))
                     }
                 },
                 // type(+ x) === type(1) -> type(+ x 1)
                 Constraint {
-                    type1: Type::Variable(6),
+                    type1: Type::Placeholder(6),
                     type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(8)),
-                        return_type: Box::from(Type::Variable(5))
+                        parameter_type: Box::from(Type::Placeholder(8)),
+                        return_type: Box::from(Type::Placeholder(5))
                     }
                 },
                 // type(+) === type(x) -> type(+ x)
                 Constraint {
-                    type1: Type::Variable(7),
+                    type1: Type::Placeholder(7),
                     type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(4)),
-                        return_type: Box::from(Type::Variable(6))
+                        parameter_type: Box::from(Type::Placeholder(4)),
+                        return_type: Box::from(Type::Placeholder(6))
                     }
                 },
                 // type(+) === int -> int
                 Constraint {
-                    type1: Type::Variable(7),
+                    type1: Type::Placeholder(7),
                     type2: Type::Function {
                         parameter_type: Box::from(Type::Integer),
                         return_type: Box::from(Type::Integer)
@@ -378,25 +350,20 @@ mod tests {
                 },
                 // type(1) === integer
                 Constraint {
-                    type1: Type::Variable(8),
+                    type1: Type::Placeholder(8),
                     type2: Type::Integer,
                 },
                 // type(inc) === type(x) -> type(inc x)
                 Constraint {
-                    type1: Type::Variable(10),
+                    type1: Type::Placeholder(2),
                     type2: Type::Function {
-                        parameter_type: Box::from(Type::Variable(11)),
-                        return_type: Box::from(Type::Variable(9))
+                        parameter_type: Box::from(Type::Placeholder(10)),
+                        return_type: Box::from(Type::Placeholder(9))
                     }
-                },
-                // type(inc) === type(inc)
-                Constraint {
-                    type1: Type::Variable(10),
-                    type2: Type::Variable(2),
                 },
                 // type(42) === integer
                 Constraint {
-                    type1: Type::Variable(11),
+                    type1: Type::Placeholder(10),
                     type2: Type::Integer,
                 }
             ])
