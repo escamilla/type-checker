@@ -69,7 +69,7 @@ impl Display for TypedTermKind {
         match self {
             TypedTermKind::Boolean(value) => write!(f, "{}", value),
             TypedTermKind::FunctionApplication { function, argument } => {
-                write!(f, "{} {}", function, argument)
+                write!(f, "{}({})", function, argument)
             }
             TypedTermKind::FunctionDefinition { parameter, body } => {
                 write!(f, "fn {} => {}", parameter, body)

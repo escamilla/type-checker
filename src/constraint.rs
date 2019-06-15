@@ -111,10 +111,6 @@ fn collect_constraints_with_bindings(
                     type1: condition.ty.clone(),
                     type2: Type::Boolean,
                 },
-                Constraint {
-                    type1: true_branch.ty.clone(),
-                    type2: false_branch.ty.clone(),
-                },
             ];
             constraints.extend(collect_constraints_with_bindings(condition, bindings));
             constraints.extend(collect_constraints_with_bindings(true_branch, bindings));
@@ -208,11 +204,6 @@ mod tests {
                 Constraint {
                     type1: Type::Placeholder(2),
                     type2: Type::Boolean,
-                },
-                // type(1) === type(0)
-                Constraint {
-                    type1: Type::Placeholder(3),
-                    type2: Type::Placeholder(4),
                 },
                 // type(1) === integer
                 Constraint {
