@@ -348,7 +348,7 @@ mod tests {
 
     #[test]
     fn test_annotate_let_expression() -> Result<(), String> {
-        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end")?;
+        let tokens = tokenize("let val inc = fn x => x + 1 in inc(42) end")?;
         let term = parse(&tokens)?;
         let typed_term = annotate(&term);
         assert_eq!(

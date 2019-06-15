@@ -14,8 +14,10 @@ pub enum Token {
     KeywordLet,
     KeywordThen,
     KeywordVal,
+    LeftParenthesis,
     Minus,
     Plus,
+    RightParenthesis,
     Times,
 }
 
@@ -50,34 +52,49 @@ impl<'a> Tokenizer<'a> {
                     Ok(Some(self.read_identifier()))
                 } else if c.is_numeric() {
                     Ok(Some(self.read_integer()))
-                } else if c == '+' {
-                    self.position += 1;
-                    Ok(Some(Token::Plus))
-                } else if c == '-' {
-                    if let Some(c2) = self.peek_char() {
-                        if c2.is_numeric() {
-                            return Ok(Some(self.read_integer()));
-                        }
-                    }
-                    self.position += 1;
-                    Ok(Some(Token::Minus))
-                } else if c == '*' {
-                    self.position += 1;
-                    Ok(Some(Token::Times))
-                } else if c == '/' {
-                    self.position += 1;
-                    Ok(Some(Token::Divide))
-                } else if c == '=' {
-                    if let Some(c2) = self.peek_char() {
-                        if c2 == '>' {
-                            self.position += 2;
-                            return Ok(Some(Token::Arrow));
-                        }
-                    }
-                    self.position += 1;
-                    Ok(Some(Token::Equals))
                 } else {
-                    Err(format!("unexpected character: {}", c))
+                    match c {
+                        '(' => {
+                            self.position += 1;
+                            Ok(Some(Token::LeftParenthesis))
+                        }
+                        ')' => {
+                            self.position += 1;
+                            Ok(Some(Token::RightParenthesis))
+                        }
+                        '+' => {
+                            self.position += 1;
+                            Ok(Some(Token::Plus))
+                        }
+                        '-' => {
+                            if let Some(c2) = self.peek_char() {
+                                if c2.is_numeric() {
+                                    return Ok(Some(self.read_integer()));
+                                }
+                            }
+                            self.position += 1;
+                            Ok(Some(Token::Minus))
+                        }
+                        '*' => {
+                            self.position += 1;
+                            Ok(Some(Token::Times))
+                        }
+                        '/' => {
+                            self.position += 1;
+                            Ok(Some(Token::Divide))
+                        }
+                        '=' => {
+                            if let Some(c2) = self.peek_char() {
+                                if c2 == '>' {
+                                    self.position += 2;
+                                    return Ok(Some(Token::Arrow));
+                                }
+                            }
+                            self.position += 1;
+                            Ok(Some(Token::Equals))
+                        }
+                        _ => Err(format!("unexpected character: {}", c)),
+                    }
                 }
             }
             None => Ok(None),
@@ -225,6 +242,14 @@ mod tests {
     }
 
     #[test]
+    fn test_tokenize_parentheses() {
+        assert_eq!(
+            tokenize("()"),
+            Ok(vec![Token::LeftParenthesis, Token::RightParenthesis])
+        );
+    }
+
+    #[test]
     fn test_tokenize_arrow() {
         assert_eq!(tokenize("=>"), Ok(vec![Token::Arrow]));
     }
@@ -277,7 +302,7 @@ mod tests {
     #[test]
     fn test_tokenize_let_expression() {
         assert_eq!(
-            tokenize("let val inc = fn x => x + 1 in inc 42 end"),
+            tokenize("let val inc = fn x => x + 1 in inc(42) end"),
             Ok(vec![
                 Token::KeywordLet,
                 Token::KeywordVal,
@@ -291,7 +316,9 @@ mod tests {
                 Token::Integer(1),
                 Token::KeywordIn,
                 Token::Identifier(String::from("inc")),
+                Token::LeftParenthesis,
                 Token::Integer(42),
+                Token::RightParenthesis,
                 Token::KeywordEnd,
             ])
         );

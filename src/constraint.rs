@@ -305,14 +305,14 @@ mod tests {
 
     #[test]
     fn test_collect_constraints_for_let_expression() -> Result<(), String> {
-        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end")?;
+        let tokens = tokenize("let val inc = fn x => x + 1 in inc(42) end")?;
         let term = parse(&tokens)?;
         let typed_term = annotate(&term)?;
         let constraints: HashSet<Constraint> = HashSet::from_iter(collect_constraints(&typed_term));
         assert_eq!(
             constraints,
             HashSet::from_iter(vec![
-                // type(let...end) === type(inc 42)
+                // type(let...end) === type(inc(42))
                 Constraint {
                     type1: Type::Placeholder(1),
                     type2: Type::Placeholder(9),
@@ -359,7 +359,7 @@ mod tests {
                     type1: Type::Placeholder(8),
                     type2: Type::Integer,
                 },
-                // type(inc) === type(x) -> type(inc x)
+                // type(inc) === type(x) -> type(inc(x))
                 Constraint {
                     type1: Type::Placeholder(2),
                     type2: Type::Function {

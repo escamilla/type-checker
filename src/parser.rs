@@ -26,10 +26,8 @@ pub enum Term {
 }
 
 pub fn parse(tokens: &Vec<Token>) -> Result<Term, String> {
-    match parse_expression(tokens, 0) {
-        Ok((term, _)) => Ok(term),
-        Err(message) => Err(message),
-    }
+    let (term, _) = parse_expression(tokens, 0)?;
+    Ok(term)
 }
 
 fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
@@ -41,15 +39,9 @@ fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
                     if is_binary_operator(next_token) {
                         parse_binary_operation(tokens, position)
                     } else {
-                        match parse_expression(tokens, position + 1) {
-                            Ok((argument_term, position)) => Ok((
-                                Term::FunctionApplication {
-                                    function: Box::from(Term::Identifier(name.clone())),
-                                    argument: Box::from(argument_term),
-                                },
-                                position,
-                            )),
-                            Err(_) => Ok((Term::Identifier(name.clone()), position + 1)),
+                        match next_token {
+                            Token::LeftParenthesis => parse_function_application(tokens, position),
+                            _ => Ok((Term::Identifier(name.clone()), position + 1)),
                         }
                     }
                 } else {
@@ -82,46 +74,15 @@ fn parse_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize
     }
 }
 
-fn parse_declaration_clause(
-    tokens: &Vec<Token>,
-    position: usize,
-) -> Result<(Term, Term, usize), String> {
-    if let Some(token) = tokens.get(position) {
-        match token {
-            Token::KeywordVal => match parse_identifier(tokens, position + 1) {
-                Ok((val_name_term, position)) => {
-                    if let Some(token) = tokens.get(position) {
-                        match token {
-                            Token::Equals => match parse_expression(tokens, position + 1) {
-                                Ok((val_value_term, position)) => {
-                                    Ok((val_name_term, val_value_term, position))
-                                }
-                                Err(message) => Err(message),
-                            },
-                            _ => Err(format!("expected `=` but got {:?}", token)),
-                        }
-                    } else {
-                        Err(String::from("expected `=` but got nothing"))
-                    }
-                }
-                Err(message) => Err(message),
-            },
-            _ => Err(format!("expected `val` keyword but got {:?}", token)),
-        }
-    } else {
-        Err(String::from("expected `val` keyword but got nothing"))
-    }
-}
-
 fn parse_let_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
     if let Some(token) = tokens.get(position) {
         match token {
-            Token::KeywordLet => match parse_declaration_clause(tokens, position + 1) {
-                Ok((declaration_name_term, declaration_value_term, position)) => {
+            Token::KeywordLet => match parse_declaration_clause(tokens, position + 1)? {
+                (declaration_name_term, declaration_value_term, position) => {
                     if let Some(token) = tokens.get(position) {
                         match token {
-                            Token::KeywordIn => match parse_expression(tokens, position + 1) {
-                                Ok((expression_term, position)) => {
+                            Token::KeywordIn => match parse_expression(tokens, position + 1)? {
+                                (expression_term, position) => {
                                     if let Some(token) = tokens.get(position) {
                                         match token {
                                             Token::KeywordEnd => Ok((
@@ -145,7 +106,6 @@ fn parse_let_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, u
                                         Err(String::from("expected `end` keyword but got nothing"))
                                     }
                                 }
-                                Err(message) => Err(message),
                             },
                             _ => Err(format!("expected `in` keyword but got {:?}", token)),
                         }
@@ -153,12 +113,40 @@ fn parse_let_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, u
                         Err(String::from("expected `in` keyword but got nothing"))
                     }
                 }
-                Err(message) => Err(message),
             },
             _ => Err(format!("expected `let` keyword but got {:?}", token)),
         }
     } else {
         Err(String::from("expected `let` keyword but got nothing"))
+    }
+}
+
+fn parse_declaration_clause(
+    tokens: &Vec<Token>,
+    position: usize,
+) -> Result<(Term, Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::KeywordVal => match parse_identifier(tokens, position + 1)? {
+                (val_name_term, position) => {
+                    if let Some(token) = tokens.get(position) {
+                        match token {
+                            Token::Equals => match parse_expression(tokens, position + 1)? {
+                                (val_value_term, position) => {
+                                    Ok((val_name_term, val_value_term, position))
+                                }
+                            },
+                            _ => Err(format!("expected `=` but got {:?}", token)),
+                        }
+                    } else {
+                        Err(String::from("expected `=` but got nothing"))
+                    }
+                }
+            },
+            _ => Err(format!("expected `val` keyword but got {:?}", token)),
+        }
+    } else {
+        Err(String::from("expected `val` keyword but got nothing"))
     }
 }
 
@@ -168,19 +156,18 @@ fn parse_function_definition(
 ) -> Result<(Term, usize), String> {
     if let Some(token) = tokens.get(position) {
         match token {
-            Token::KeywordFn => match parse_identifier(tokens, position + 1) {
-                Ok((parameter_term, position)) => {
+            Token::KeywordFn => match parse_identifier(tokens, position + 1)? {
+                (parameter_term, position) => {
                     if let Some(token) = tokens.get(position) {
                         match token {
-                            Token::Arrow => match parse_expression(tokens, position + 1) {
-                                Ok((body_term, position)) => Ok((
+                            Token::Arrow => match parse_expression(tokens, position + 1)? {
+                                (body_term, position) => Ok((
                                     Term::FunctionDefinition {
                                         parameter: Box::from(parameter_term),
                                         body: Box::from(body_term),
                                     },
                                     position,
                                 )),
-                                Err(message) => Err(message),
                             },
                             _ => Err(format!(
                                 "expected `=>` after `fn` keyword and function parameter but got {:?}",
@@ -193,7 +180,6 @@ fn parse_function_definition(
                         ))
                     }
                 }
-                Err(message) => Err(message),
             },
             _ => Err(format!("expected `fn` keyword but got {:?}", token)),
         }
@@ -202,20 +188,59 @@ fn parse_function_definition(
     }
 }
 
+fn parse_function_application(
+    tokens: &Vec<Token>,
+    position: usize,
+) -> Result<(Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::Identifier(name) => {
+                if let Some(token) = tokens.get(position + 1) {
+                    match token {
+                        Token::LeftParenthesis => {
+                            let (argument_term, position) = parse_expression(tokens, position + 2)?;
+                            if let Some(token) = tokens.get(position) {
+                                match token {
+                                    Token::RightParenthesis => Ok((
+                                        Term::FunctionApplication {
+                                            function: Box::from(Term::Identifier(name.clone())),
+                                            argument: Box::from(argument_term),
+                                        },
+                                        position + 1,
+                                    )),
+                                    _ => Err(format!("expected ')' but got {:?}", token)),
+                                }
+                            } else {
+                                Err(String::from("expected ')' but got nothing"))
+                            }
+                        }
+                        _ => Err(format!("expected '(' but got {:?}", token)),
+                    }
+                } else {
+                    Err(String::from("expected '(' but got nothing"))
+                }
+            }
+            _ => Err(format!("expected identifier but got {:?}", token)),
+        }
+    } else {
+        Err(String::from("expected identifier but got nothing"))
+    }
+}
+
 fn parse_if_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
     if let Some(token) = tokens.get(position) {
         match token {
-            Token::KeywordIf => match parse_expression(tokens, position + 1) {
-                Ok((test_condition_term, position)) => {
+            Token::KeywordIf => match parse_expression(tokens, position + 1)? {
+                (test_condition_term, position) => {
                     if let Some(token) = tokens.get(position) {
                         match token {
-                            Token::KeywordThen => match parse_expression(tokens, position + 1) {
-                                Ok((true_branch_term, position)) => {
+                            Token::KeywordThen => match parse_expression(tokens, position + 1)? {
+                                (true_branch_term, position) => {
                                     if let Some(token) = tokens.get(position) {
                                         match token {
                                             Token::KeywordElse => {
-                                                match parse_expression(tokens, position + 1) {
-                                                    Ok((false_branch_term, position)) => Ok((
+                                                match parse_expression(tokens, position + 1)? {
+                                                    (false_branch_term, position) => Ok((
                                                         Term::IfExpression {
                                                             condition: Box::from(
                                                                 test_condition_term,
@@ -229,7 +254,6 @@ fn parse_if_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, us
                                                         },
                                                         position,
                                                     )),
-                                                    Err(message) => Err(message),
                                                 }
                                             }
                                             _ => Err(format!(
@@ -241,7 +265,6 @@ fn parse_if_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, us
                                         Err(String::from("expected `else` keyword but got nothing"))
                                     }
                                 }
-                                Err(message) => Err(message),
                             },
                             _ => Err(format!("expected `then` keyword but got {:?}", token)),
                         }
@@ -249,23 +272,11 @@ fn parse_if_expression(tokens: &Vec<Token>, position: usize) -> Result<(Term, us
                         Err(String::from("expected `then` keyword but got nothing"))
                     }
                 }
-                Err(message) => Err(message),
             },
             _ => Err(format!("expected `if` keyword but got {:?}", token)),
         }
     } else {
         Err(String::from("expected `if` keyword but got nothing"))
-    }
-}
-
-fn parse_identifier(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
-    if let Some(token) = tokens.get(position) {
-        match token {
-            Token::Identifier(name) => Ok((Term::Identifier(name.clone()), position + 1)),
-            _ => Err(format!("expected identifier but got {:?}", token)),
-        }
-    } else {
-        Err(String::from("expected identifier but got nothing"))
     }
 }
 
@@ -277,12 +288,12 @@ fn is_binary_operator(token: &Token) -> bool {
 }
 
 fn parse_binary_operation(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
-    match parse_integer_or_identifier(tokens, position) {
-        Ok((left_term, position)) => {
+    match parse_integer_or_identifier(tokens, position)? {
+        (left_term, position) => {
             if let Some(middle_token) = tokens.get(position) {
                 if is_binary_operator(middle_token) {
-                    match parse_integer_or_identifier(tokens, position + 1) {
-                        Ok((right_term, position)) => Ok((
+                    match parse_integer_or_identifier(tokens, position + 1)? {
+                        (right_term, position) => Ok((
                             Term::FunctionApplication {
                                 function: Box::from(Term::FunctionApplication {
                                     function: Box::from(Term::Identifier(match middle_token {
@@ -299,7 +310,6 @@ fn parse_binary_operation(tokens: &Vec<Token>, position: usize) -> Result<(Term,
                             },
                             position,
                         )),
-                        Err(message) => Err(message),
                     }
                 } else {
                     Err(format!(
@@ -311,7 +321,6 @@ fn parse_binary_operation(tokens: &Vec<Token>, position: usize) -> Result<(Term,
                 Err(String::from("expected binary operator but got nothing"))
             }
         }
-        Err(message) => Err(message),
     }
 }
 
@@ -332,6 +341,17 @@ fn parse_integer_or_identifier(
         Err(String::from(
             "expected integer or identifier but got nothing",
         ))
+    }
+}
+
+fn parse_identifier(tokens: &Vec<Token>, position: usize) -> Result<(Term, usize), String> {
+    if let Some(token) = tokens.get(position) {
+        match token {
+            Token::Identifier(name) => Ok((Term::Identifier(name.clone()), position + 1)),
+            _ => Err(format!("expected identifier but got {:?}", token)),
+        }
+    } else {
+        Err(String::from("expected identifier but got nothing"))
     }
 }
 
@@ -509,7 +529,7 @@ mod tests {
 
     #[test]
     fn test_parse_let_expression() -> Result<(), String> {
-        let tokens = tokenize("let val inc = fn x => x + 1 in inc 42 end")?;
+        let tokens = tokenize("let val inc = fn x => x + 1 in inc(42) end")?;
         assert_eq!(
             parse(&tokens),
             Ok(Term::LetExpression {
